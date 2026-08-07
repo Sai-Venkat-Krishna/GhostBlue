@@ -1,0 +1,234 @@
+diff --git a/Package.swift b/Package.swift
+index df027ca..9dc3952 100644
+--- a/Package.swift
++++ b/Package.swift
+@@ -19,7 +19,8 @@ let package = Package(
+         )
+     ],
+     dependencies: [
+-        .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.61.0")
++        // SwiftLint commented out to avoid build plugin conflicts when used as a local submodule
++        // .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.61.0")
+     ],
+     targets: [
+         .target(
+@@ -38,7 +39,7 @@ let package = Package(
+                 .define("DEBUG", .when(configuration: .debug)),
+                 .define("RELEASE", .when(configuration: .release))
+             ],
+-            plugins: [.plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")],
++            // plugins: [.plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")],
+         ),
+         .executableTarget(
+             name: "bbcli",
+diff --git a/Sources/BetterBlueKit/API/APIClient.swift b/Sources/BetterBlueKit/API/APIClient.swift
+index 927ae1e..800863f 100644
+--- a/Sources/BetterBlueKit/API/APIClient.swift
++++ b/Sources/BetterBlueKit/API/APIClient.swift
+@@ -18,6 +18,10 @@ public struct APIClientConfiguration {
+     public let accountId: UUID
+     public let logSink: HTTPLogSink?
+     public let rememberMeToken: String?
++    /// Long-lived refresh token returned by `login()`. Used by brands/regions that support
++    /// token-based re-auth (Hyundai Europe, Kia Europe) so the app can re-establish a
++    /// session without re-asking the user for their password. Nil for password-only flows.
++    public let refreshToken: String?
+     public let redactPII: Bool
+     public let deviceId: String?
+ 
+@@ -30,6 +34,7 @@ public struct APIClientConfiguration {
+         accountId: UUID,
+         logSink: HTTPLogSink? = nil,
+         rememberMeToken: String? = nil,
++        refreshToken: String? = nil,
+         redactPII: Bool = true,
+         deviceId: String? = nil
+     ) {
+@@ -41,6 +46,7 @@ public struct APIClientConfiguration {
+         self.accountId = accountId
+         self.logSink = logSink
+         self.rememberMeToken = rememberMeToken
++        self.refreshToken = refreshToken
+         self.redactPII = redactPII
+         self.deviceId = deviceId
+     }
+@@ -52,6 +58,13 @@ public struct APIClientConfiguration {
+ @MainActor
+ public protocol APIClientProtocol {
+     func login() async throws -> AuthToken
++
++    /// Register the device with the upstream service and return the server-issued device
++    /// identifier. Called before `login()` when the account has no persisted `deviceId`.
++    /// Brands that have no device-registration step inherit the default implementation
++    /// in the protocol extension below, which simply generates a stable local UUID.
++    func registerDevice() async throws -> String
++
+     func fetchVehicles(authToken: AuthToken) async throws -> [Vehicle]
+     /// Fetch the latest status for a vehicle.
+     /// - Parameter cached: When true, return the server-cached snapshot (cheap, instant).
+@@ -91,6 +104,14 @@ public enum MFAMethod: String, Sendable {
+ // MARK: - Default Implementations
+ 
+ extension APIClientProtocol {
++    /// Default device registration — return a stable client-generated UUID. Existing
++    /// brand clients inherit this and the behavior matches GhostBlue's prior
++    /// `deviceId = UUID().uuidString.uppercased()` line in `BBAccount.initialize`.
++    /// Brands that have a real server-side registration endpoint can override.
++    public func registerDevice() async throws -> String {
++        UUID().uuidString.uppercased()
++    }
++
+     public func fetchEVTripDetails(for vehicle: Vehicle, authToken: AuthToken) async throws -> [EVTripDetail]? {
+         nil
+     }
+diff --git a/Sources/BetterBlueKit/API/FakeAPIClient.swift b/Sources/BetterBlueKit/API/FakeAPIClient.swift
+index c28e15f..0d47f08 100644
+--- a/Sources/BetterBlueKit/API/FakeAPIClient.swift
++++ b/Sources/BetterBlueKit/API/FakeAPIClient.swift
+@@ -89,6 +89,44 @@ public class FakeAPIClient: APIClientProtocol {
+         return status
+     }
+ 
++    public func fetchEVTripDetails(for vehicle: Vehicle, authToken _: AuthToken) async throws -> [EVTripDetail]? {
++        // Test account: generate seven days of synthetic trips so the Trip History sheet
++        // has something realistic to render. Pattern is a daily commute + weekend road trip,
++        // sized to give the energy-breakdown bars visible variation. Skips when the fake
++        // vehicle isn't electric — same gate the real Hyundai client uses.
++        guard vehicle.fuelType.hasElectricCapability else { return nil }
++        let day: TimeInterval = 24 * 60 * 60
++        let now = Date()
++        let template: [(distance: Double, durationMin: Int, totalWh: Int, regenWh: Int, climateWh: Int, drivetrainWh: Int)] = [
++            (28.4, 45, 8_950, 1_140, 720, 6_950),
++            (12.1, 24, 3_820, 380, 240, 3_010),
++            (46.7, 72, 14_120, 2_010, 980, 10_640),
++            (8.3, 18, 2_710, 220, 410, 1_950),
++            (35.6, 58, 11_330, 1_540, 880, 8_410),
++            (19.2, 31, 6_120, 690, 410, 4_710),
++            (112.5, 165, 33_980, 4_120, 2_140, 26_540)
++        ]
++        let baseOdometer: Double = 12_345
++        return template.enumerated().map { (offset, t) -> EVTripDetail in
++            let remainder = template.dropFirst(offset + 1).map(\.distance).reduce(0, +)
++            let avg = t.durationMin > 0 ? t.distance / (Double(t.durationMin) / 60.0) : 0
++            return EVTripDetail(
++                distance: t.distance,
++                odometer: baseOdometer + remainder,
++                accessoriesEnergy: Int(Double(t.totalWh) * 0.04),
++                totalEnergyUsed: t.totalWh,
++                regenEnergy: t.regenWh,
++                climateEnergy: t.climateWh,
++                drivetrainEnergy: t.drivetrainWh,
++                batteryCareEnergy: Int(Double(t.totalWh) * 0.02),
++                startDate: now.addingTimeInterval(-Double(offset + 1) * day),
++                durationSeconds: t.durationMin * 60,
++                avgSpeed: avg,
++                maxSpeed: avg + 18.0
++            )
++        }
++    }
++
+     public func sendCommand(for vehicle: Vehicle, command: VehicleCommand, authToken _: AuthToken) async throws {
+         // Check for debug PIN validation failure
+         if try await vehicleProvider.shouldFailPinValidation(for: vehicle.vin, accountId: accountId) {
+diff --git a/Sources/BetterBlueKit/Models/HTTPLogging.swift b/Sources/BetterBlueKit/Models/HTTPLogging.swift
+index 2e8f723..25b927f 100644
+--- a/Sources/BetterBlueKit/Models/HTTPLogging.swift
++++ b/Sources/BetterBlueKit/Models/HTTPLogging.swift
+@@ -13,6 +13,7 @@ public enum HTTPRequestType: String, CaseIterable, Codable, Sendable {
+     case login, fetchVehicles, fetchVehicleStatus, sendCommand
+     case sendMFA, verifyMFA
+     case fetchEVTripDetails
++    case abrpPlan, abrpTelemetry, abrpCarModels
+ 
+     public var displayName: String {
+         switch self {
+@@ -23,6 +24,9 @@ public enum HTTPRequestType: String, CaseIterable, Codable, Sendable {
+         case .sendMFA: "Send MFA"
+         case .verifyMFA: "Verify MFA"
+         case .fetchEVTripDetails: "Fetch Trip Details"
++        case .abrpPlan: "ABRP Plan"
++        case .abrpTelemetry: "ABRP Telemetry"
++        case .abrpCarModels: "ABRP Car Models"
+         }
+     }
+ }
+diff --git a/Sources/BetterBlueKit/Resources/Troubleshooting.md b/Sources/BetterBlueKit/Resources/Troubleshooting.md
+index e4b5af9..5e39ed9 100644
+--- a/Sources/BetterBlueKit/Resources/Troubleshooting.md
++++ b/Sources/BetterBlueKit/Resources/Troubleshooting.md
+@@ -1,6 +1,6 @@
+-# BetterBlue Troubleshooting
++# GhostBlue Troubleshooting
+ 
+-If none of the below fixes your issue, [open a GitHub issue](https://github.com/schmidtwmark/BetterBlue/issues).
++If none of the below fixes your issue, [open a GitHub issue](https://github.com/schmidtwmark/GhostBlue/issues).
+ 
+ ## Resolving Login Issues
+ 
+diff --git a/Tests/BetterBlueKitTests/CoreEnumsTests.swift b/Tests/BetterBlueKitTests/CoreEnumsTests.swift
+index 34ad23d..0671fd1 100644
+--- a/Tests/BetterBlueKitTests/CoreEnumsTests.swift
++++ b/Tests/BetterBlueKitTests/CoreEnumsTests.swift
+@@ -104,6 +104,7 @@ struct CoreEnumsTests {
+     @Test("FuelType initialization from number")
+     func testFuelTypeFromNumber() {
+         #expect(FuelType(number: 0) == .gas)
++        #expect(FuelType(number: 1) == .phev)
+         #expect(FuelType(number: 2) == .electric)
+         #expect(FuelType(number: 5) == .gas) // default case
+         #expect(FuelType(number: -1) == .gas) // default case
+@@ -112,9 +113,7 @@ struct CoreEnumsTests {
+     @Test("FuelType all cases exist")
+     func testFuelTypeAllCases() {
+         let allCases = FuelType.allCases
+-        #expect(allCases.count == 2)
+-        #expect(allCases.contains(.gas))
+-        #expect(allCases.contains(.electric))
++        #expect(Set(allCases) == [.gas, .phev, .electric])
+     }
+ 
+     // MARK: - Utility Function Tests
+@@ -154,7 +153,7 @@ struct CoreEnumsTests {
+ 
+     @Test("FuelType is Codable")
+     func testFuelTypeCodable() throws {
+-        let fuelTypes: [FuelType] = [.gas, .electric]
++        let fuelTypes: [FuelType] = [.gas, .phev, .electric]
+ 
+         for fuelType in fuelTypes {
+             let encoded = try JSONEncoder().encode(fuelType)
+diff --git a/Tests/BetterBlueKitTests/HTTPLoggingTests.swift b/Tests/BetterBlueKitTests/HTTPLoggingTests.swift
+index d45695f..869c153 100644
+--- a/Tests/BetterBlueKitTests/HTTPLoggingTests.swift
++++ b/Tests/BetterBlueKitTests/HTTPLoggingTests.swift
+@@ -17,14 +17,11 @@ struct HTTPLoggingTests {
+     @Test("HTTPRequestType all cases")
+     func testHTTPRequestTypeAllCases() {
+         let allCases = HTTPRequestType.allCases
+-        #expect(allCases.count == 7)
+-        #expect(allCases.contains(.login))
+-        #expect(allCases.contains(.fetchVehicles))
+-        #expect(allCases.contains(.fetchVehicleStatus))
+-        #expect(allCases.contains(.sendCommand))
+-        #expect(allCases.contains(.sendMFA))
+-        #expect(allCases.contains(.verifyMFA))
+-        #expect(allCases.contains(.fetchEVTripDetails))
++        #expect(Set(allCases) == [
++            .login, .fetchVehicles, .fetchVehicleStatus, .sendCommand,
++            .sendMFA, .verifyMFA, .fetchEVTripDetails,
++            .abrpPlan, .abrpTelemetry, .abrpCarModels
++        ])
+     }
+ 
+     @Test("HTTPRequestType display names")
+@@ -35,6 +32,10 @@ struct HTTPLoggingTests {
+         #expect(HTTPRequestType.sendCommand.displayName == "Send Command")
+         #expect(HTTPRequestType.sendMFA.displayName == "Send MFA")
+         #expect(HTTPRequestType.verifyMFA.displayName == "Verify MFA")
++        #expect(HTTPRequestType.fetchEVTripDetails.displayName == "Fetch Trip Details")
++        #expect(HTTPRequestType.abrpPlan.displayName == "ABRP Plan")
++        #expect(HTTPRequestType.abrpTelemetry.displayName == "ABRP Telemetry")
++        #expect(HTTPRequestType.abrpCarModels.displayName == "ABRP Car Models")
+     }
+ 
+     @Test("HTTPRequestType raw values")
