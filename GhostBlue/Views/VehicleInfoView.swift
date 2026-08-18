@@ -180,8 +180,8 @@ struct VehicleInfoView: View {
                         HStack {
                             Label("Charging Costs", systemImage: "dollarsign.circle")
                             Spacer()
-                            if let rate = bbVehicle.electricityRatePerKWh {
-                                Text(rate, format: .currency(code: Locale.current.currency?.identifier ?? "USD"))
+                            if let homeRate = bbVehicle.offPeakElectricityRatePerKWh {
+                                Text("Home \(homeRate.formatted(.currency(code: Locale.current.currency?.identifier ?? "USD")))")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }

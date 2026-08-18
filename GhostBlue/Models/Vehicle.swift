@@ -340,6 +340,9 @@ class BBVehicle {
     var electricityRatePerKWh: Double?
     /// Optional reduced tariff used inside the user's preferred off-peak window.
     var offPeakElectricityRatePerKWh: Double?
+    /// Default public DC fast-charging price. Individual sessions can store
+    /// an actual receipt total when a network's price differs by station.
+    var dcFastChargingRatePerKWh: Double?
     var offPeakStartHour: Int = 0
     var offPeakEndHour: Int = 6
     var monthlyChargingBudget: Double?
@@ -769,7 +772,8 @@ extension BBVehicle: Encodable {
         case battery12V, doorOpen, trunkOpen, hoodOpen, tirePressureWarning
         case customName, isHidden, sortOrder, backgroundColorName, watchBackgroundColorName
         case vehicleImageColorRaw
-        case chargePortTypeRaw, batteryCapacityKWh, electricityRatePerKWh, lastTripArchiveAttemptDate
+        case chargePortTypeRaw, batteryCapacityKWh, electricityRatePerKWh
+        case offPeakElectricityRatePerKWh, dcFastChargingRatePerKWh, lastTripArchiveAttemptDate
         case smartChargingEnabled, smartChargingHomeOnly, smartChargingTargetSOC
         case smartChargingLastRunAt, smartChargingLastResult
         case debugConfiguration, debugLiveActivity, enableSeatHeatControls
@@ -815,6 +819,8 @@ extension BBVehicle: Encodable {
         try container.encode(chargePortTypeRaw, forKey: .chargePortTypeRaw)
         try container.encodeIfPresent(batteryCapacityKWh, forKey: .batteryCapacityKWh)
         try container.encodeIfPresent(electricityRatePerKWh, forKey: .electricityRatePerKWh)
+        try container.encodeIfPresent(offPeakElectricityRatePerKWh, forKey: .offPeakElectricityRatePerKWh)
+        try container.encodeIfPresent(dcFastChargingRatePerKWh, forKey: .dcFastChargingRatePerKWh)
         try container.encodeIfPresent(lastTripArchiveAttemptDate, forKey: .lastTripArchiveAttemptDate)
         try container.encode(smartChargingEnabled, forKey: .smartChargingEnabled)
         try container.encode(smartChargingHomeOnly, forKey: .smartChargingHomeOnly)
@@ -871,6 +877,11 @@ final class ChargeSession {
     /// Rate copied when the session starts so historical totals do not change
     /// when the user's tariff changes later.
     var electricityRatePerKWh: Double?
+    /// Receipt total entered by the user. Takes precedence over estimates.
+    var actualCost: Double?
+    /// New sessions choose their rate using location and charger type. False
+    /// identifies older sessions created before location-aware pricing.
+    var rateWasLocationAware: Bool = false
     private var speedSamplesData: Data?
 
     var isActive: Bool { endDate == nil }
@@ -1307,7 +1318,12 @@ extension BBVehicle {
             longitude: location?.longitude,
             isDCFast: evStatus.plugType == .dcCharger
         )
-        session.electricityRatePerKWh = effectiveElectricityRate(at: date)
+        session.electricityRatePerKWh = chargingRate(
+            at: date,
+            locationType: session.locationType,
+            isDCFast: session.isDCFast
+        )
+        session.rateWasLocationAware = true
         session.maxChargeSpeedKW = evStatus.chargeSpeed
         session.appendSpeedSample(
             date: date,
@@ -1345,7 +1361,7 @@ extension BBVehicle {
     }
 
     func effectiveElectricityRate(at date: Date) -> Double? {
-        guard let baseRate = electricityRatePerKWh else { return nil }
+        let baseRate = electricityRatePerKWh
         guard let offPeakElectricityRatePerKWh else { return baseRate }
 
         if smartChargingEnabled {
@@ -1362,6 +1378,52 @@ extension BBVehicle {
             isOffPeak = hour >= offPeakStartHour || hour < offPeakEndHour
         }
         return isOffPeak ? offPeakElectricityRatePerKWh : baseRate
+    }
+
+    /// Resolves the default rate for a new session. Home charging uses the
+    /// configured super-off-peak price; DC charging never inherits a home
+    /// time-of-use rate.
+    func chargingRate(
+        at date: Date,
+        locationType: ChargingLocationType,
+        isDCFast: Bool
+    ) -> Double? {
+        if isDCFast || locationType == .publicDC {
+            return dcFastChargingRatePerKWh ?? electricityRatePerKWh
+        }
+        if locationType == .home || (locationType == .automatic && smartChargingEnabled) {
+            return effectiveElectricityRate(at: date)
+        }
+        return electricityRatePerKWh
+    }
+
+    func chargingRate(for session: ChargeSession) -> Double? {
+        if session.rateWasLocationAware, let rate = session.electricityRatePerKWh {
+            return rate
+        }
+
+        // Re-price legacy sessions by their classification so old DC entries
+        // are not shown at the residential super-off-peak rate.
+        return chargingRate(
+            at: session.startDate,
+            locationType: session.locationType,
+            isDCFast: session.isDCFast
+        ) ?? session.electricityRatePerKWh
+    }
+
+    func energyDelivered(for session: ChargeSession) -> Double {
+        guard let batteryCapacityKWh, batteryCapacityKWh > 0, session.percentAdded > 0 else {
+            return session.energyAddedKWh
+        }
+        return batteryCapacityKWh * session.percentAdded / 100
+    }
+
+    func chargingCost(for session: ChargeSession) -> Double? {
+        if let actualCost = session.actualCost, actualCost >= 0 {
+            return actualCost
+        }
+        guard let rate = chargingRate(for: session), rate > 0 else { return nil }
+        return energyDelivered(for: session) * rate
     }
 
     var isAtConfiguredHome: Bool {

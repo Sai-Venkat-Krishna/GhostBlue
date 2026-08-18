@@ -30,7 +30,6 @@ struct HomeView: View {
     @State private var showingAccountInfo = false
     @State private var showingHTTPLogs = false
     @State private var showingVehicleConfiguration = false
-    @State private var showingChargeHistory = false
     @State private var showingHomeLayout = false
     @State private var showingOwnershipHub = false
     @State private var isEditingHome = false
@@ -131,11 +130,6 @@ struct HomeView: View {
                             }
                         }
                 }
-            }
-        }
-        .sheet(isPresented: $showingChargeHistory) {
-            if let bbVehicle {
-                ChargeHistoryView(bbVehicle: bbVehicle)
             }
         }
         .sheet(isPresented: $showingHomeLayout) {
@@ -248,9 +242,9 @@ struct HomeView: View {
             Spacer()
 
             Button {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                    isEditingHome.toggle()
-                }
+                // Avoid animating the entire dashboard (maps, glass cards,
+                // charts, and remote images) when edit controls are inserted.
+                isEditingHome.toggle()
             } label: {
                 Text(isEditingHome ? "Done" : "Edit")
                     .font(.caption.bold())
@@ -260,7 +254,20 @@ struct HomeView: View {
             .buttonStyle(.plain)
 
             refreshButton
-            moreMenu(for: bbVehicle)
+            HomeMoreActionsButton(
+                coordinate: appSettings.hideVehicleLocation ? nil : bbVehicle.coordinate,
+                destinationName: bbVehicle.displayName,
+                showsDebugActions: appSettings.debugModeEnabled,
+                showsFakeVehicleConfiguration: bbVehicle.account?.brandEnum == .fake,
+                onVehicleInfo: { showingVehicleInfo = true },
+                onVehicleCenter: { showingOwnershipHub = true },
+                onAccountInfo: { showingAccountInfo = true },
+                onHTTPLogs: { showingHTTPLogs = true },
+                onConfigureVehicle: { showingVehicleConfiguration = true },
+                onSettings: { showingSettings = true },
+                onCustomizeHome: { showingHomeLayout = true },
+                onEditHome: { isEditingHome = true }
+            )
         }
         .padding(.top, 8)
     }
@@ -347,86 +354,6 @@ struct HomeView: View {
         .animation(.spring(response: 0.4, dampingFraction: 0.6), value: isRefreshing)
         .animation(.spring(response: 0.4, dampingFraction: 0.6), value: showRefreshSuccess)
         .animation(.spring(response: 0.4, dampingFraction: 0.6), value: showCooldownFeedback)
-    }
-
-    @ViewBuilder
-    private func moreMenu(for bbVehicle: BBVehicle) -> some View {
-        Menu {
-            if !appSettings.hideVehicleLocation, let location = bbVehicle.location {
-                let coordinate = CLLocationCoordinate2D(
-                    latitude: location.latitude,
-                    longitude: location.longitude
-                )
-                Menu {
-                    NavigationMenuContent(
-                        coordinate: coordinate,
-                        destinationName: bbVehicle.displayName
-                    )
-                } label: {
-                    Label("Navigate to Vehicle", systemImage: "location")
-                }
-            }
-
-            Button {
-                showingVehicleInfo = true
-            } label: {
-                Label("Vehicle Info", systemImage: "car.fill")
-            }
-
-            Button {
-                showingOwnershipHub = true
-            } label: {
-                Label("Vehicle Center", systemImage: "car.2.fill")
-            }
-
-            Button {
-                showingAccountInfo = true
-            } label: {
-                Label("Account Info", systemImage: "person.circle")
-            }
-
-            if AppSettings.shared.debugModeEnabled {
-                Button {
-                    showingHTTPLogs = true
-                } label: {
-                    Label("HTTP Logs", systemImage: "network")
-                }
-            }
-
-            if bbVehicle.account?.brandEnum == .fake {
-                Button {
-                    showingVehicleConfiguration = true
-                } label: {
-                    Label("Configure Vehicle", systemImage: "wrench.and.screwdriver")
-                }
-            }
-
-            Button {
-                showingSettings = true
-            } label: {
-                Label("Settings", systemImage: "gearshape.fill")
-            }
-
-            Button {
-                showingHomeLayout = true
-            } label: {
-                Label("Customize Home", systemImage: "rectangle.3.group")
-            }
-
-            Button {
-                withAnimation {
-                    isEditingHome = true
-                }
-            } label: {
-                Label("Edit on Home", systemImage: "slider.horizontal.3")
-            }
-        } label: {
-            Image(systemName: "ellipsis")
-                .fontWeight(.semibold)
-                .frame(width: 44, height: 44)
-                .gbGlassCircle()
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Vehicle Visual
@@ -627,8 +554,18 @@ struct HomeView: View {
         vehicle: BBVehicle,
         status: VehicleStatus.EVStatus
     ) -> Double? {
+        let isDCFast = status.plugType == .dcCharger
+        let locationType = vehicle.inferredChargingLocationType(
+            latitude: vehicle.location?.latitude,
+            longitude: vehicle.location?.longitude,
+            isDCFast: isDCFast
+        )
         guard let capacity = vehicle.batteryCapacityKWh,
-              let rate = vehicle.electricityRatePerKWh,
+              let rate = vehicle.chargingRate(
+                  at: Date(),
+                  locationType: locationType,
+                  isDCFast: isDCFast
+              ),
               capacity > 0,
               rate > 0
         else { return nil }
@@ -721,8 +658,18 @@ struct HomeView: View {
                 homeSectionEditor(section, isHidden: isHidden)
             }
 
-            homeSection(section, size: appSettings.size(for: section), for: bbVehicle)
-                .opacity(isHidden ? 0.42 : 1)
+            if isHidden {
+                if isEditingHome {
+                    Label("Hidden on Home", systemImage: "eye.slash")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 14))
+                        .accessibilityLabel("\(section.title) is hidden on Home")
+                }
+            } else {
+                homeSection(section, size: appSettings.size(for: section), for: bbVehicle)
+            }
         }
     }
 
@@ -762,8 +709,6 @@ struct HomeView: View {
                     statusGrid(for: bbVehicle)
                 }
             }
-        case .history:
-            chargeHistorySection(for: bbVehicle, limit: size == .compact ? 1 : (size == .expanded ? 4 : 2))
         case .location:
             if bbVehicle.coordinate != nil {
                 VStack(spacing: 12) {
@@ -1018,10 +963,8 @@ struct HomeView: View {
         guard let index = appSettings.homeSectionOrder.firstIndex(of: section) else { return }
         let destination = min(max(0, index + offset), appSettings.homeSectionOrder.count - 1)
         guard destination != index else { return }
-        withAnimation {
-            let moved = appSettings.homeSectionOrder.remove(at: index)
-            appSettings.homeSectionOrder.insert(moved, at: destination)
-        }
+        let moved = appSettings.homeSectionOrder.remove(at: index)
+        appSettings.homeSectionOrder.insert(moved, at: destination)
     }
 
     private func compactStatusRow(for vehicle: BBVehicle) -> some View {
@@ -1189,9 +1132,11 @@ struct HomeView: View {
                     chargingSpeedChart(session)
                 }
 
-                if vehicle.batteryCapacityKWh == nil || vehicle.electricityRatePerKWh == nil {
+                if vehicle.batteryCapacityKWh == nil
+                    || (vehicle.offPeakElectricityRatePerKWh == nil
+                        && vehicle.electricityRatePerKWh == nil) {
                     Label(
-                        "Add usable battery capacity and electricity rate in Charging settings for energy and cost estimates.",
+                        "Add usable battery capacity and your home super-off-peak rate in Charging settings for energy and cost estimates.",
                         systemImage: "info.circle"
                     )
                     .font(.caption2)
@@ -1463,48 +1408,6 @@ struct HomeView: View {
             temperature.value,
             to: appSettings.preferredTemperatureUnit
         )
-    }
-
-    // MARK: - Charge History Section
-
-    private func chargeSessions(for bbVehicle: BBVehicle) -> [ChargeSession] {
-        allChargeSessions.filter { $0.vin == bbVehicle.vin && $0.isMeaningful }
-    }
-
-    @ViewBuilder
-    private func chargeHistorySection(for bbVehicle: BBVehicle, limit: Int = 2) -> some View {
-        let sessions = chargeSessions(for: bbVehicle)
-
-        if !sessions.isEmpty {
-            GBSectionHeader(title: "Charging history")
-
-            ForEach(sessions.prefix(limit)) { session in
-                ChargeSessionCard(
-                    session: session,
-                    batteryCapacityKWh: bbVehicle.batteryCapacityKWh,
-                    electricityRatePerKWh: bbVehicle.electricityRatePerKWh
-                )
-            }
-
-            if sessions.count > limit {
-                Button {
-                    showingChargeHistory = true
-                } label: {
-                    HStack {
-                        Text("View all \(sessions.count) sessions")
-                            .font(.subheadline.weight(.semibold))
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(14)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .gbGlassCard(radius: GBDesign.tileRadius, interactive: true)
-            }
-        }
     }
 
     // MARK: - Location Card
@@ -1859,13 +1762,82 @@ struct EVRangeHero: View {
     }
 }
 
+/// Owns its presentation state so tapping the overflow button invalidates
+/// only this small subtree instead of rebuilding the full Home dashboard.
+private struct HomeMoreActionsButton: View {
+    let coordinate: CLLocationCoordinate2D?
+    let destinationName: String
+    let showsDebugActions: Bool
+    let showsFakeVehicleConfiguration: Bool
+    let onVehicleInfo: () -> Void
+    let onVehicleCenter: () -> Void
+    let onAccountInfo: () -> Void
+    let onHTTPLogs: () -> Void
+    let onConfigureVehicle: () -> Void
+    let onSettings: () -> Void
+    let onCustomizeHome: () -> Void
+    let onEditHome: () -> Void
+
+    @State private var showingActions = false
+
+    var body: some View {
+        Button {
+            showingActions = true
+        } label: {
+            Image(systemName: "ellipsis")
+                .fontWeight(.semibold)
+                .frame(width: 44, height: 44)
+                .gbGlassCircle()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("More vehicle actions")
+        .confirmationDialog(
+            "Vehicle Actions",
+            isPresented: $showingActions,
+            titleVisibility: .visible
+        ) {
+            if let coordinate {
+                ForEach(NavigationHelper.availableMapApps, id: \.rawValue) { app in
+                    Button("Navigate with \(app.rawValue)") {
+                        NavigationHelper.navigate(
+                            using: app,
+                            to: coordinate,
+                            destinationName: destinationName
+                        )
+                    }
+                }
+            }
+
+            Button("Vehicle Info", action: onVehicleInfo)
+            Button("Vehicle Center", action: onVehicleCenter)
+            Button("Account Info", action: onAccountInfo)
+
+            if showsDebugActions {
+                Button("HTTP Logs", action: onHTTPLogs)
+            }
+
+            if showsFakeVehicleConfiguration {
+                Button("Configure Vehicle", action: onConfigureVehicle)
+            }
+
+            Button("Settings", action: onSettings)
+            Button("Customize Home", action: onCustomizeHome)
+            Button("Edit on Home", action: onEditHome)
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+}
+
 private struct VehicleBriefingItem: Identifiable {
-    let id = UUID()
     let category: String
     let title: String
     let message: String
     let systemImage: String
     let tint: Color
+
+    /// Stable across dashboard state updates so SwiftUI can reuse the row
+    /// instead of tearing it down whenever a header control is tapped.
+    var id: String { "\(category)|\(title)" }
 }
 
 private struct ChargingFlowIndicator: View {

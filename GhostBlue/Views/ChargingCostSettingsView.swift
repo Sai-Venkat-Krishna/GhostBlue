@@ -8,7 +8,9 @@ struct ChargingCostSettingsView: View {
     @Bindable var vehicle: BBVehicle
     @Environment(\.modelContext) private var modelContext
     @State private var batteryCapacity: Double = 0
-    @State private var electricityRate: Double = 0
+    @State private var defaultElectricityRate: Double = 0
+    @State private var homeSuperOffPeakRate: Double = 0
+    @State private var dcFastChargingRate: Double = 0
 
     var body: some View {
         Form {
@@ -25,15 +27,29 @@ struct ChargingCostSettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("Electricity price") {
-                TextField("Price per kWh", value: $electricityRate, format: .currency(code: Locale.current.currency?.identifier ?? "USD").precision(.fractionLength(3)))
+            Section("Charging prices") {
+                TextField("Home super off-peak / kWh", value: $homeSuperOffPeakRate, format: currencyFormat)
                     .keyboardType(.decimalPad)
-                    .onChange(of: electricityRate) { _, value in
+                    .onChange(of: homeSuperOffPeakRate) { _, value in
+                        vehicle.offPeakElectricityRatePerKWh = value > 0 ? value : nil
+                        save()
+                    }
+
+                TextField("DC fast default / kWh", value: $dcFastChargingRate, format: currencyFormat)
+                    .keyboardType(.decimalPad)
+                    .onChange(of: dcFastChargingRate) { _, value in
+                        vehicle.dcFastChargingRatePerKWh = value > 0 ? value : nil
+                        save()
+                    }
+
+                TextField("Other charging / kWh", value: $defaultElectricityRate, format: currencyFormat)
+                    .keyboardType(.decimalPad)
+                    .onChange(of: defaultElectricityRate) { _, value in
                         vehicle.electricityRatePerKWh = value > 0 ? value : nil
                         save()
                     }
 
-                Text("Optional. GhostBlue uses this one rate for a clear estimated session and lifetime charging cost.")
+                Text("Home sessions use the super-off-peak rate. Public DC sessions use the DC default, and you can enter the actual receipt total on any session in the Charging tab.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -42,8 +58,15 @@ struct ChargingCostSettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             batteryCapacity = vehicle.batteryCapacityKWh ?? 0
-            electricityRate = vehicle.electricityRatePerKWh ?? 0
+            defaultElectricityRate = vehicle.electricityRatePerKWh ?? 0
+            homeSuperOffPeakRate = vehicle.offPeakElectricityRatePerKWh ?? 0
+            dcFastChargingRate = vehicle.dcFastChargingRatePerKWh ?? 0
         }
+    }
+
+    private var currencyFormat: FloatingPointFormatStyle<Double>.Currency {
+        .currency(code: Locale.current.currency?.identifier ?? "USD")
+            .precision(.fractionLength(3))
     }
 
     private func save() {

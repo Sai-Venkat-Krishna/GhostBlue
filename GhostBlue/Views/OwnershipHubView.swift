@@ -471,8 +471,12 @@ private struct ChargingIntelligenceView: View {
 
     private var monthCost: Double {
         monthSessions.reduce(0) { result, session in
-            result + session.energyAddedKWh * (session.electricityRatePerKWh ?? vehicle.electricityRatePerKWh ?? 0)
+            result + (vehicle.chargingCost(for: session) ?? 0)
         }
+    }
+
+    private var monthEnergy: Double {
+        monthSessions.reduce(0) { $0 + vehicle.energyDelivered(for: $1) }
     }
 
     private var projectedCost: Double {
@@ -493,7 +497,7 @@ private struct ChargingIntelligenceView: View {
                     Divider()
                     metric("Projected", value: projectedCost.formatted(.currency(code: currencyCode)))
                     Divider()
-                    metric("Energy", value: "\(monthSessions.reduce(0) { $0 + $1.energyAddedKWh }.formatted(.number.precision(.fractionLength(1)))) kWh")
+                    metric("Energy", value: "\(monthEnergy.formatted(.number.precision(.fractionLength(1)))) kWh")
                 }
 
                 if let budget = vehicle.monthlyChargingBudget, budget > 0 {
@@ -578,12 +582,16 @@ private struct ChargingIntelligenceView: View {
 
             Section {
                 OptionalCurrencyField(
-                    title: "Standard rate / kWh",
+                    title: "Other charging / kWh",
                     value: optionalDouble(\.electricityRatePerKWh)
                 )
                 OptionalCurrencyField(
-                    title: "Off-peak rate / kWh",
+                    title: "Home super off-peak / kWh",
                     value: optionalDouble(\.offPeakElectricityRatePerKWh)
+                )
+                OptionalCurrencyField(
+                    title: "DC fast default / kWh",
+                    value: optionalDouble(\.dcFastChargingRatePerKWh)
                 )
                 Stepper(
                     "Off-peak starts \(hourLabel(vehicle.offPeakStartHour))",
@@ -602,7 +610,7 @@ private struct ChargingIntelligenceView: View {
             } header: {
                 Text("Tariff")
             } footer: {
-                Text("New charging sessions copy the applicable rate, keeping historical costs stable if your tariff changes.")
+                Text("Home sessions use the super-off-peak rate. DC sessions use the DC default. A session's actual receipt total can override either estimate in the Charging tab.")
             }
 
             Section {
@@ -658,7 +666,7 @@ private struct ChargingIntelligenceView: View {
                                 Text(session.startDate, format: .dateTime.month(.abbreviated).day().hour().minute())
                                     .font(.headline)
                                 Spacer()
-                                Text("\(session.energyAddedKWh.formatted(.number.precision(.fractionLength(1)))) kWh")
+                                Text("\(vehicle.energyDelivered(for: session).formatted(.number.precision(.fractionLength(1)))) kWh")
                                     .foregroundStyle(.secondary)
                             }
                             Picker(
@@ -1281,7 +1289,11 @@ private struct OwnershipSetupView: View {
             appSettings.notificationsEnabled,
             appSettings.hasCompletedOwnershipOnboarding,
             vehicles.contains { $0.customName != nil },
-            vehicles.contains { $0.electricityRatePerKWh != nil }
+            vehicles.contains {
+                $0.electricityRatePerKWh != nil
+                    || $0.offPeakElectricityRatePerKWh != nil
+                    || $0.dcFastChargingRatePerKWh != nil
+            }
         ].filter { $0 }.count
     }
 
@@ -1317,7 +1329,11 @@ private struct OwnershipSetupView: View {
                     detail: "Choose a name and the shared vehicle image color."
                 )
                 setupRow(
-                    done: vehicles.contains { $0.electricityRatePerKWh != nil },
+                    done: vehicles.contains {
+                        $0.electricityRatePerKWh != nil
+                            || $0.offPeakElectricityRatePerKWh != nil
+                            || $0.dcFastChargingRatePerKWh != nil
+                    },
                     title: "Add your electricity tariff",
                     detail: "Unlock accurate charging costs and monthly budget tracking."
                 )

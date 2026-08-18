@@ -190,7 +190,6 @@ enum HomeSection: String, CaseIterable, Codable, Identifiable, Sendable {
     case charging
     case health
     case status
-    case history
     case location
 
     var id: String { rawValue }
@@ -201,7 +200,6 @@ enum HomeSection: String, CaseIterable, Codable, Identifiable, Sendable {
         case .charging: "Charging"
         case .health: "Vehicle Health"
         case .status: "Vehicle Status"
-        case .history: "Charging History"
         case .location: "Location"
         }
     }
@@ -212,7 +210,6 @@ enum HomeSection: String, CaseIterable, Codable, Identifiable, Sendable {
         case .charging: "bolt.fill"
         case .health: "heart.text.square.fill"
         case .status: "gauge.with.needle"
-        case .history: "clock.arrow.circlepath"
         case .location: "map.fill"
         }
     }
@@ -805,8 +802,8 @@ class AppSettings {
         homeDashboardPreset = preset
         switch preset {
         case .essential:
-            homeSectionOrder = [.briefing, .health, .status, .charging, .location, .history]
-            homeHiddenSections = [.history, .location]
+            homeSectionOrder = [.briefing, .health, .status, .charging, .location]
+            homeHiddenSections = [.location]
             homeSectionSizes = [
                 .briefing: .standard,
                 .health: .compact,
@@ -814,17 +811,16 @@ class AppSettings {
                 .charging: .standard
             ]
         case .charging:
-            homeSectionOrder = [.briefing, .charging, .health, .history, .status, .location]
+            homeSectionOrder = [.briefing, .charging, .health, .status, .location]
             homeHiddenSections = [.location]
             homeSectionSizes = [
                 .briefing: .compact,
                 .charging: .expanded,
-                .health: .compact,
-                .history: .standard
+                .health: .compact
             ]
         case .roadTrip:
-            homeSectionOrder = [.briefing, .health, .location, .status, .charging, .history]
-            homeHiddenSections = [.history]
+            homeSectionOrder = [.briefing, .health, .location, .status, .charging]
+            homeHiddenSections = []
             homeSectionSizes = [
                 .briefing: .standard,
                 .location: .expanded,

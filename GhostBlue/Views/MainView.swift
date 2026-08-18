@@ -3,7 +3,8 @@
 //  GhostBlue
 //
 //  Root shell for the tabbed redesign: Home (controls + status),
-//  Location (map), and Trips (drive history) over a Liquid Glass tab
+//  Location (map), Charging (energy history), and Trips (drive history)
+//  over a Liquid Glass tab
 //  bar. Owns account loading, the periodic refresh loop, and deep-link
 //  vehicle selection.
 //
@@ -18,11 +19,13 @@ import WidgetKit
 enum AppTab: Hashable {
     case home
     case location
+    case charging
     case trips
 }
 
 extension Notification.Name {
     static let scrollHomeToTop = Notification.Name("GhostBlue.ScrollHomeToTop")
+    static let scrollChargingToTop = Notification.Name("GhostBlue.ScrollChargingToTop")
     static let scrollTripsToTop = Notification.Name("GhostBlue.ScrollTripsToTop")
     static let recenterLocationTab = Notification.Name("GhostBlue.RecenterLocationTab")
 }
@@ -216,6 +219,13 @@ struct MainView: View {
                 )
             }
 
+            Tab("Charging", systemImage: "bolt.fill", value: AppTab.charging) {
+                ChargingView(
+                    displayedVehicles: displayedVehicles,
+                    selectedVehicleIndex: $selectedVehicleIndex,
+                )
+            }
+
             Tab("Trips", systemImage: "road.lanes", value: AppTab.trips) {
                 TripsView(
                     displayedVehicles: displayedVehicles,
@@ -365,6 +375,7 @@ private struct TabBarReselectObserver: UIViewControllerRepresentable {
             switch tappedIndex {
             case 0: notification = .scrollHomeToTop
             case 1: notification = .recenterLocationTab
+            case 2: notification = .scrollChargingToTop
             default: notification = .scrollTripsToTop
             }
             NotificationCenter.default.post(name: notification, object: nil)
