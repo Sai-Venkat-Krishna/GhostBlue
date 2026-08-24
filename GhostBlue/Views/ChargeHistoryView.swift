@@ -238,6 +238,7 @@ struct ChargeHistoryView: View {
     @State private var selectedPowerFilter: ChargePowerFilter = .all
     @State private var selectedChargeDay: Date?
     @State private var editingSession: ChargeSession?
+    @State private var showingManualEntry = false
     @State private var showingCostSettings = false
 
     private var sessions: [ChargeSession] {
@@ -371,7 +372,7 @@ struct ChargeHistoryView: View {
                                         Button {
                                             editingSession = session
                                         } label: {
-                                            Label("Edit location or actual cost", systemImage: "pencil")
+                                            Label("Edit session", systemImage: "pencil")
                                                 .font(.caption.bold())
                                                 .frame(maxWidth: .infinity)
                                                 .padding(.vertical, 8)
@@ -397,9 +398,15 @@ struct ChargeHistoryView: View {
         .environment(\.colorScheme, bbVehicle.backgroundColorScheme)
         .sheet(item: $editingSession) { session in
             NavigationStack {
-                ChargeSessionCostEditor(session: session, vehicle: bbVehicle)
+                ChargeSessionEditor(session: session, vehicle: bbVehicle)
             }
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.large])
+        }
+        .sheet(isPresented: $showingManualEntry) {
+            NavigationStack {
+                ChargeSessionEditor(session: nil, vehicle: bbVehicle)
+            }
+            .presentationDetents([.large])
         }
         .sheet(isPresented: $showingCostSettings) {
             NavigationStack {
@@ -493,6 +500,17 @@ struct ChargeHistoryView: View {
             }
 
             Spacer()
+
+            Button {
+                showingManualEntry = true
+            } label: {
+                Image(systemName: "plus")
+                    .fontWeight(.semibold)
+                    .frame(width: 40, height: 40)
+                    .gbGlassCircle()
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Add charging session manually")
 
             Button {
                 showingCostSettings = true
@@ -741,10 +759,17 @@ struct ChargeHistoryView: View {
             Text("No charging sessions yet")
                 .font(.headline.weight(.bold))
 
-            Text("Plug in your vehicle and sessions will be tracked here automatically.")
+            Text("Plug in your vehicle for automatic tracking, or add a completed session manually.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+
+            Button {
+                showingManualEntry = true
+            } label: {
+                Label("Add session manually", systemImage: "plus.circle.fill")
+            }
+            .buttonStyle(.borderedProminent)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 48)
@@ -753,43 +778,199 @@ struct ChargeHistoryView: View {
     }
 }
 
-private struct ChargeSessionCostEditor: View {
-    @Bindable var session: ChargeSession
+private struct ChargeSessionEditor: View {
+    let session: ChargeSession?
     let vehicle: BBVehicle
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+
+    @State private var startDate: Date
+    @State private var endDate: Date
+    @State private var isCompleted: Bool
+    @State private var startPercentage: Double
+    @State private var endPercentage: Double
+    @State private var energyText: String
+    @State private var peakSpeedText: String
+    @State private var isDCFast: Bool
+    @State private var locationType: ChargingLocationType
     @State private var rateText = ""
     @State private var actualCostText = ""
+    @State private var saveError: String?
+
+    init(session: ChargeSession?, vehicle: BBVehicle) {
+        self.session = session
+        self.vehicle = vehicle
+
+        let now = Date()
+        let initialStart = session?.startDate
+            ?? Calendar.current.date(byAdding: .hour, value: -1, to: now)
+            ?? now.addingTimeInterval(-3_600)
+        let initialEnd = session?.endDate
+            ?? max(session?.lastSampleDate ?? now, initialStart.addingTimeInterval(60))
+        let initialLocation = session?.locationType ?? .automatic
+        let initialIsDCFast = session?.isDCFast ?? false
+        let initialRate = session.flatMap { vehicle.chargingRate(for: $0) }
+            ?? vehicle.chargingRate(
+                at: initialStart,
+                locationType: initialLocation,
+                isDCFast: initialIsDCFast
+            )
+
+        _startDate = State(initialValue: initialStart)
+        _endDate = State(initialValue: initialEnd)
+        // New manual sessions are always completed so they cannot interfere
+        // with the automatic tracker looking for the current open session.
+        _isCompleted = State(initialValue: session?.endDate != nil || session == nil)
+        _startPercentage = State(initialValue: session?.startPercentage ?? 20)
+        _endPercentage = State(initialValue: session?.endPercentage ?? 30)
+        _energyText = State(initialValue: Self.numberText(session?.energyAddedKWh))
+        _peakSpeedText = State(initialValue: Self.numberText(session?.maxChargeSpeedKW))
+        _isDCFast = State(initialValue: initialIsDCFast)
+        _locationType = State(initialValue: initialLocation)
+        _rateText = State(initialValue: Self.numberText(initialRate, fractionDigits: 3))
+        _actualCostText = State(
+            initialValue: Self.numberText(
+                session?.actualCost,
+                fractionDigits: 2,
+                includeZero: true
+            )
+        )
+    }
 
     private var currencyCode: String {
         Locale.current.currency?.identifier ?? "USD"
     }
 
-    private var energyKWh: Double {
-        vehicle.energyDelivered(for: session)
+    private var isCreating: Bool { session == nil }
+
+    private var dateValidationMessage: String? {
+        guard isCompleted, endDate <= startDate else { return nil }
+        return "End time must be later than start time."
+    }
+
+    private var numericValidationMessage: String? {
+        if !energyText.isEmpty && nonnegativeDouble(energyText) == nil {
+            return "Energy must be zero or greater."
+        }
+        if !peakSpeedText.isEmpty && nonnegativeDouble(peakSpeedText) == nil {
+            return "Peak speed must be zero or greater."
+        }
+        if !rateText.isEmpty && positiveDouble(rateText) == nil {
+            return "Rate must be greater than zero."
+        }
+        if !actualCostText.isEmpty && nonnegativeDouble(actualCostText) == nil {
+            return "Actual cost must be zero or greater."
+        }
+        return nil
+    }
+
+    private var validationMessage: String? {
+        dateValidationMessage ?? numericValidationMessage
+    }
+
+    private var draftEnergyKWh: Double {
+        if let capacity = vehicle.batteryCapacityKWh,
+           capacity > 0,
+           endPercentage > startPercentage {
+            return capacity * (endPercentage - startPercentage) / 100
+        }
+        return nonnegativeDouble(energyText) ?? 0
+    }
+
+    private var draftCost: Double? {
+        if let actualCost = nonnegativeDouble(actualCostText) {
+            return actualCost
+        }
+        guard let rate = positiveDouble(rateText), draftEnergyKWh > 0 else { return nil }
+        return rate * draftEnergyKWh
     }
 
     var body: some View {
         Form {
-            Section("Session") {
-                LabeledContent(
-                    "Energy delivered",
-                    value: "\(energyKWh.formatted(.number.precision(.fractionLength(1)))) kWh"
+            Section("Date and time") {
+                DatePicker(
+                    "Started",
+                    selection: $startDate,
+                    displayedComponents: [.date, .hourAndMinute]
                 )
 
-                Picker("Charging location", selection: $session.locationTypeRaw) {
+                if session?.isActive == true {
+                    Toggle("Mark session complete", isOn: $isCompleted)
+                }
+
+                if isCompleted {
+                    DatePicker(
+                        "Ended",
+                        selection: $endDate,
+                        displayedComponents: [.date, .hourAndMinute]
+                    )
+                } else {
+                    Label("Automatic tracking will continue this session.", systemImage: "bolt.fill")
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                }
+
+                if let dateValidationMessage {
+                    Label(dateValidationMessage, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+
+            Section("Charge") {
+                Stepper(
+                    "Started at \(Int(startPercentage))%",
+                    value: $startPercentage,
+                    in: 0 ... 100,
+                    step: 1
+                )
+                Stepper(
+                    "Ended at \(Int(endPercentage))%",
+                    value: $endPercentage,
+                    in: 0 ... 100,
+                    step: 1
+                )
+
+                HStack {
+                    Text("Energy delivered")
+                    Spacer()
+                    TextField("Optional", text: $energyText)
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                        .frame(maxWidth: 100)
+                    Text("kWh")
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack {
+                    Text("Peak speed")
+                    Spacer()
+                    TextField("Optional", text: $peakSpeedText)
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                        .frame(maxWidth: 100)
+                    Text("kW")
+                        .foregroundStyle(.secondary)
+                }
+
+                Toggle("DC fast charging", isOn: $isDCFast)
+            }
+
+            Section("Location") {
+                Picker("Charging location", selection: $locationType) {
                     ForEach(ChargingLocationType.allCases) { type in
                         Label(type.title, systemImage: type.systemImage)
-                            .tag(type.rawValue)
+                            .tag(type)
                     }
-                }
-                .onChange(of: session.locationTypeRaw) { _, _ in
-                    applyDefaultRate()
                 }
             }
 
             Section {
+                LabeledContent(
+                    "Energy delivered",
+                    value: "\(draftEnergyKWh.formatted(.number.precision(.fractionLength(1)))) kWh"
+                )
                 HStack {
                     Text("Rate per kWh")
                     Spacer()
@@ -797,11 +978,6 @@ private struct ChargeSessionCostEditor: View {
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .frame(maxWidth: 120)
-                }
-                .onChange(of: rateText) { _, value in
-                    session.electricityRatePerKWh = positiveDouble(value)
-                    session.rateWasLocationAware = true
-                    save()
                 }
 
                 HStack {
@@ -812,53 +988,68 @@ private struct ChargeSessionCostEditor: View {
                         .multilineTextAlignment(.trailing)
                         .frame(maxWidth: 120)
                 }
-                .onChange(of: actualCostText) { _, value in
-                    session.actualCost = nonnegativeDouble(value)
-                    save()
-                }
 
-                if let cost = vehicle.chargingCost(for: session) {
+                if let cost = draftCost {
                     LabeledContent(
-                        session.actualCost == nil ? "Estimated cost" : "Recorded cost",
+                        actualCostText.isEmpty ? "Estimated cost" : "Recorded cost",
                         value: cost.formatted(.currency(code: currencyCode))
                     )
                 }
 
                 Button("Restore default estimate", systemImage: "arrow.counterclockwise") {
-                    session.actualCost = nil
                     actualCostText = ""
-                    applyDefaultRate()
+                    applyDefaultRateToDraft()
                 }
             } header: {
                 Text("Cost")
             } footer: {
                 Text("Use the receipt total for DC chargers with session fees, idle fees, or station-specific pricing.")
             }
-        }
-        .navigationTitle("Charging Cost")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Done") { dismiss() }
+
+            if let numericValidationMessage {
+                Section {
+                    Label(numericValidationMessage, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+
+            if let saveError {
+                Section {
+                    Label(saveError, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                }
             }
         }
-        .onAppear {
-            let rate = vehicle.chargingRate(for: session)
-            rateText = rate.map { String(format: "%.3f", $0) } ?? ""
-            actualCostText = session.actualCost.map { String(format: "%.2f", $0) } ?? ""
+        .navigationTitle(isCreating ? "Add Charging Session" : "Edit Charging Session")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") { dismiss() }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") { save() }
+                    .disabled(validationMessage != nil)
+            }
+        }
+        .onChange(of: startDate) { _, _ in
+            applyDefaultRateToDraft()
+        }
+        .onChange(of: locationType) { _, _ in
+            applyDefaultRateToDraft()
+        }
+        .onChange(of: isDCFast) { _, _ in
+            applyDefaultRateToDraft()
         }
     }
 
-    private func applyDefaultRate() {
+    private func applyDefaultRateToDraft() {
         let rate = vehicle.chargingRate(
-            at: session.startDate,
-            locationType: session.locationType,
-            isDCFast: session.isDCFast
+            at: startDate,
+            locationType: locationType,
+            isDCFast: isDCFast
         )
-        session.electricityRatePerKWh = rate
-        session.rateWasLocationAware = true
-        rateText = rate.map { String(format: "%.3f", $0) } ?? ""
-        save()
+        rateText = Self.numberText(rate, fractionDigits: 3)
     }
 
     private func positiveDouble(_ text: String) -> Double? {
@@ -872,10 +1063,50 @@ private struct ChargeSessionCostEditor: View {
     }
 
     private func save() {
+        guard validationMessage == nil else { return }
+
+        let target = session ?? ChargeSession(
+            vin: vehicle.vin,
+            startDate: startDate,
+            startPercentage: startPercentage,
+            isDCFast: isDCFast
+        )
+        let isNewSession = session == nil
+        if isNewSession {
+            modelContext.insert(target)
+        }
+
+        target.applyUserEdits(
+            startDate: startDate,
+            endDate: isCompleted ? endDate : nil,
+            startPercentage: startPercentage,
+            endPercentage: endPercentage,
+            energyAddedKWh: nonnegativeDouble(energyText) ?? 0,
+            maxChargeSpeedKW: nonnegativeDouble(peakSpeedText) ?? 0,
+            isDCFast: isDCFast,
+            locationType: locationType,
+            electricityRatePerKWh: positiveDouble(rateText),
+            actualCost: nonnegativeDouble(actualCostText)
+        )
+
         do {
             try modelContext.save()
+            dismiss()
         } catch {
-            BBLogger.error(.app, "Failed to save charging session cost: \(error)")
+            if isNewSession {
+                modelContext.delete(target)
+            }
+            saveError = "Could not save this charging session. Please try again."
+            BBLogger.error(.app, "Failed to save charging session: \(error)")
         }
+    }
+
+    private static func numberText(
+        _ value: Double?,
+        fractionDigits: Int = 1,
+        includeZero: Bool = false
+    ) -> String {
+        guard let value, value > 0 || (includeZero && value == 0) else { return "" }
+        return String(format: "%.*f", fractionDigits, value)
     }
 }

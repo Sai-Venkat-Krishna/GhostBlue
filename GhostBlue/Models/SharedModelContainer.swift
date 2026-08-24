@@ -10,6 +10,21 @@ import Foundation
 import SwiftData
 
 func getSimulatorStoreURL() -> URL {
+    // Compatibility and UI tests can isolate their SwiftData store per
+    // simulator runtime. This avoids an older runtime trying to open a store
+    // last migrated by a newer Persistence framework. Normal launches retain
+    // the historical shared path used by app, widget, and Watch targets.
+    if let overridePath = ProcessInfo.processInfo.environment["GHOSTBLUE_SIMULATOR_STORE_PATH"],
+       !overridePath.isEmpty {
+        let storeURL = URL(fileURLWithPath: overridePath)
+        try? FileManager.default.createDirectory(
+            at: storeURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true,
+            attributes: nil
+        )
+        return storeURL
+    }
+
     // In simulator, use a fixed shared location to work around App Group container isolation
     let sharedSimulatorPath = "/tmp/GhostBlue_Shared"
     try? FileManager.default.createDirectory(
@@ -128,7 +143,7 @@ func createSharedModelContainer(enableCloudKit: Bool = false) throws -> ModelCon
         RemoteCommandActivity.self,
         MaintenanceReminder.self,
         VehicleAutomation.self
-    ], version: .init(1, 0, 16))
+    ], version: .init(1, 0, 17))
 
     #if targetEnvironment(simulator)
         let storeURL = getSimulatorStoreURL()

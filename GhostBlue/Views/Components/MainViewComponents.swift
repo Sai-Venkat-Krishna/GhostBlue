@@ -10,6 +10,7 @@ import SwiftUI
 
 struct EmptyAccountsView: View {
     let transition: Namespace.ID
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var showingAddAccount = false
     @State private var showingTroubleshooting = false
 
@@ -46,10 +47,20 @@ struct EmptyAccountsView: View {
                             .frame(maxWidth: 330)
                     }
 
-                    HStack(spacing: 9) {
-                        welcomeFeature("bolt.fill", "Controls")
-                        welcomeFeature("chart.xyaxis.line", "Insights")
-                        welcomeFeature("lock.shield.fill", "Private")
+                    Group {
+                        if dynamicTypeSize.isAccessibilitySize {
+                            VStack(spacing: 9) {
+                                welcomeFeature("bolt.fill", "Controls")
+                                welcomeFeature("chart.xyaxis.line", "Insights")
+                                welcomeFeature("lock.shield.fill", "Private")
+                            }
+                        } else {
+                            HStack(spacing: 9) {
+                                welcomeFeature("bolt.fill", "Controls")
+                                welcomeFeature("chart.xyaxis.line", "Insights")
+                                welcomeFeature("lock.shield.fill", "Private")
+                            }
+                        }
                     }
 
                     Button {

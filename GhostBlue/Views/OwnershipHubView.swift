@@ -645,7 +645,7 @@ private struct ChargingIntelligenceView: View {
 
             Section {
                 Button {
-                    if let url = URL(string: "http://maps.apple.com/?q=EV%20Charging") {
+                    if let url = URL(string: "https://maps.apple.com/?q=EV%20Charging") {
                         openURL(url)
                     }
                 } label: {

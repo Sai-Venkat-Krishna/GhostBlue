@@ -132,6 +132,77 @@ final class VehicleArchiveTests: XCTestCase {
         XCTAssertEqual(session.percentAdded, 0, "A stale status must never create negative added charge")
     }
 
+    func testManualChargeSessionCanBeCreatedAndItsDatesEdited() throws {
+        let container = try ModelContainer(
+            for: Schema([ChargeSession.self]),
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let context = container.mainContext
+        let originalStart = Date(timeIntervalSince1970: 1_700_000_000)
+        let originalEnd = originalStart.addingTimeInterval(3_600)
+        let session = ChargeSession(
+            vin: "TESTVIN",
+            startDate: originalStart,
+            startPercentage: 20,
+            isDCFast: false
+        )
+        session.pendingStopDate = originalEnd
+        session.pendingStopObservedAt = originalEnd
+        session.pendingStopPercentage = 45
+        session.applyUserEdits(
+            startDate: originalStart,
+            endDate: originalEnd,
+            startPercentage: 20,
+            endPercentage: 45,
+            energyAddedKWh: 18.4,
+            maxChargeSpeedKW: 11.2,
+            isDCFast: false,
+            locationType: .home,
+            electricityRatePerKWh: 0.128,
+            actualCost: 2.36
+        )
+        context.insert(session)
+        try context.save()
+
+        var saved = try XCTUnwrap(context.fetch(FetchDescriptor<ChargeSession>()).first)
+        XCTAssertEqual(saved.startDate, originalStart)
+        XCTAssertEqual(saved.endDate, originalEnd)
+        XCTAssertEqual(saved.lastSampleDate, originalEnd)
+        XCTAssertEqual(saved.startPercentage, 20)
+        XCTAssertEqual(saved.endPercentage, 45)
+        XCTAssertEqual(saved.energyAddedKWh, 18.4)
+        XCTAssertEqual(saved.maxChargeSpeedKW, 11.2)
+        XCTAssertEqual(saved.locationType, .home)
+        XCTAssertEqual(saved.electricityRatePerKWh, 0.128)
+        XCTAssertEqual(saved.actualCost, 2.36)
+        XCTAssertNil(saved.pendingStopDate)
+        XCTAssertFalse(saved.isActive)
+
+        let correctedStart = originalStart.addingTimeInterval(-900)
+        let correctedEnd = originalEnd.addingTimeInterval(1_200)
+        saved.applyUserEdits(
+            startDate: correctedStart,
+            endDate: correctedEnd,
+            startPercentage: 18,
+            endPercentage: 48,
+            energyAddedKWh: 21,
+            maxChargeSpeedKW: 10.8,
+            isDCFast: false,
+            locationType: .home,
+            electricityRatePerKWh: 0.128,
+            actualCost: nil
+        )
+        try context.save()
+
+        saved = try XCTUnwrap(context.fetch(FetchDescriptor<ChargeSession>()).first)
+        XCTAssertEqual(saved.startDate, correctedStart)
+        XCTAssertEqual(saved.endDate, correctedEnd)
+        XCTAssertEqual(saved.lastSampleDate, correctedEnd)
+        XCTAssertEqual(saved.percentAdded, 30)
+        XCTAssertNil(saved.actualCost)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<ChargeSession>()), 1)
+    }
+
     func testChargeSessionPreservesExactStartEndAndUpdateTimes() throws {
         let container = try ModelContainer(
             for: Schema([BBAccount.self, BBVehicle.self, ClimatePreset.self, ChargeSession.self]),
@@ -177,9 +248,89 @@ final class VehicleArchiveTests: XCTestCase {
         ))
 
         session = try XCTUnwrap(context.fetch(FetchDescriptor<ChargeSession>()).first)
+        XCTAssertNil(session.endDate, "One non-charging response must remain an unconfirmed stop")
+        XCTAssertEqual(session.lastSampleDate, updatedAt)
+
+        vehicle.updateStatus(with: makeVehicleStatus(
+            charging: false,
+            percentage: 30,
+            syncDate: endedAt.addingTimeInterval(60)
+        ))
+
+        session = try XCTUnwrap(context.fetch(FetchDescriptor<ChargeSession>()).first)
         XCTAssertEqual(session.startDate, startedAt)
         XCTAssertEqual(session.endDate, endedAt)
         XCTAssertEqual(session.lastSampleDate, endedAt)
+    }
+
+    func testChargeSessionIgnoresStaleStopAndSurvivesTransientFalseStatus() throws {
+        let container = try ModelContainer(
+            for: Schema([BBAccount.self, BBVehicle.self, ClimatePreset.self, ChargeSession.self]),
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let context = container.mainContext
+        let vehicle = BBVehicle(from: Vehicle(
+            vin: "TESTVIN",
+            regId: "test-registration",
+            model: "Test EV",
+            accountId: UUID(),
+            fuelType: .electric,
+            generation: 3,
+            odometer: Distance(length: 0, units: .miles)
+        ))
+        context.insert(vehicle)
+        try context.save()
+
+        let startedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let chargingUpdate = startedAt.addingTimeInterval(120)
+        vehicle.updateStatus(with: makeVehicleStatus(
+            charging: true,
+            percentage: 20,
+            syncDate: startedAt
+        ))
+        vehicle.updateStatus(with: makeVehicleStatus(
+            charging: true,
+            percentage: 22,
+            syncDate: chargingUpdate
+        ))
+
+        // A cached status older than the latest charging sample must do nothing.
+        vehicle.updateStatus(with: makeVehicleStatus(
+            charging: false,
+            percentage: 20,
+            syncDate: startedAt.addingTimeInterval(60)
+        ))
+
+        var sessions = try context.fetch(FetchDescriptor<ChargeSession>())
+        var session = try XCTUnwrap(sessions.first)
+        XCTAssertTrue(session.isActive)
+        XCTAssertEqual(session.lastSampleDate, chargingUpdate)
+
+        // A fresh false response becomes a candidate, but charging resuming
+        // keeps the same session instead of closing and creating a second one.
+        let falseBlip = startedAt.addingTimeInterval(180)
+        vehicle.updateStatus(with: makeVehicleStatus(
+            charging: false,
+            percentage: 23,
+            syncDate: falseBlip
+        ))
+        session = try XCTUnwrap(context.fetch(FetchDescriptor<ChargeSession>()).first)
+        XCTAssertTrue(session.isActive)
+        XCTAssertEqual(session.lastSampleDate, chargingUpdate)
+
+        let resumedAt = startedAt.addingTimeInterval(240)
+        vehicle.updateStatus(with: makeVehicleStatus(
+            charging: true,
+            percentage: 24,
+            syncDate: resumedAt
+        ))
+
+        sessions = try context.fetch(FetchDescriptor<ChargeSession>())
+        session = try XCTUnwrap(sessions.first)
+        XCTAssertEqual(sessions.count, 1)
+        XCTAssertTrue(session.isActive)
+        XCTAssertEqual(session.lastSampleDate, resumedAt)
+        XCTAssertEqual(session.endPercentage, 24)
     }
 
     private func makeVehicleStatus(

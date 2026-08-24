@@ -41,7 +41,7 @@ final class CustomizationAnalyticsTests: XCTestCase {
             from: ["location", "status", "location", "unknown"]
         )
 
-        XCTAssertEqual(order, [.location, .status, .briefing, .charging, .health, .history])
+        XCTAssertEqual(order, [.location, .status, .briefing, .charging, .health])
     }
 
     func testVehicleImageColorPersistsAsRawValue() {

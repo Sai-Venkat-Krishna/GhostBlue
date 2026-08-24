@@ -717,13 +717,19 @@ extension BBVehicle {
 
     @MainActor
     func wakeUpStatusWaiters() {
+        // Capture plain values before crossing the actor boundary. Holding a
+        // SwiftData model in this unstructured task can outlive its context
+        // (for example during test teardown or account removal), making any
+        // later property access trap with "model instance was destroyed".
+        let vehicleId = id
+        let vehicleName = displayName
         Task {
             let wasAwakened = await Self.statusWaitingManager.wakeUp(
-                vehicleId: self.id,
+                vehicleId: vehicleId,
             )
             if wasAwakened {
                 print(
-                    "🔔 [BBVehicle] Waking up status waiter for vehicle \(self.displayName)",
+                    "🔔 [BBVehicle] Waking up status waiter for vehicle \(vehicleName)",
                 )
             }
         }
@@ -868,6 +874,11 @@ final class ChargeSession {
     /// Timestamp of the newest status sample folded into this session —
     /// used to deduplicate stale/cached statuses across targets
     var lastSampleDate: Date = Date()
+    /// A single non-charging response is only a candidate because BlueLink
+    /// can briefly report false while the vehicle continues to charge.
+    var pendingStopDate: Date?
+    var pendingStopObservedAt: Date?
+    var pendingStopPercentage: Double?
     var latitude: Double?
     var longitude: Double?
     /// User-correctable classification. Empty values are inferred from plug
@@ -930,6 +941,41 @@ final class ChargeSession {
             )
         )
         speedSamples = samples
+    }
+
+    /// Applies user-entered corrections from Charging History. Keeping these
+    /// assignments on the model gives manual creation and later edits the
+    /// same normalization rules and makes the persistence behavior testable.
+    func applyUserEdits(
+        startDate: Date,
+        endDate: Date?,
+        startPercentage: Double,
+        endPercentage: Double,
+        energyAddedKWh: Double,
+        maxChargeSpeedKW: Double,
+        isDCFast: Bool,
+        locationType: ChargingLocationType,
+        electricityRatePerKWh: Double?,
+        actualCost: Double?
+    ) {
+        self.startDate = startDate
+        self.endDate = endDate
+        lastSampleDate = endDate ?? max(lastSampleDate, startDate)
+        self.startPercentage = min(100, max(0, startPercentage))
+        self.endPercentage = min(100, max(0, endPercentage))
+        self.energyAddedKWh = max(0, energyAddedKWh)
+        self.maxChargeSpeedKW = max(0, maxChargeSpeedKW)
+        self.isDCFast = isDCFast
+        self.locationType = locationType
+        self.electricityRatePerKWh = electricityRatePerKWh.flatMap { $0 > 0 ? $0 : nil }
+        self.actualCost = actualCost.flatMap { $0 >= 0 ? $0 : nil }
+        rateWasLocationAware = true
+
+        if endDate != nil {
+            pendingStopDate = nil
+            pendingStopObservedAt = nil
+            pendingStopPercentage = nil
+        }
     }
 
     init(
@@ -1242,6 +1288,9 @@ extension BBVehicle {
     /// this long while "charging"), close it at its last sample rather than
     /// stretching it across the gap.
     private static let staleSessionGap: TimeInterval = 3 * 3600
+    /// Repeated cached stop responses can share one vehicle timestamp. Once
+    /// the same stop has remained visible for this long, it is confirmed.
+    private static let stopConfirmationDelay: TimeInterval = 30
 
     /// Folds a fresh status into the charge-session log: opens a session on
     /// the first charging sample, integrates energy on subsequent ones, and
@@ -1268,8 +1317,16 @@ extension BBVehicle {
                 return
             }
 
-            // Ignore replays of statuses we've already folded in
+            // Ignore replays of statuses we've already folded in. A charging
+            // status older than an unconfirmed stop candidate is stale too;
+            // an equal or newer one clears the transient stop.
             guard sampleDate > session.lastSampleDate else { return }
+            if let pendingStopDate = session.pendingStopDate {
+                guard sampleDate >= pendingStopDate else { return }
+                session.pendingStopDate = nil
+                session.pendingStopObservedAt = nil
+                session.pendingStopPercentage = nil
+            }
 
             let gap = sampleDate.timeIntervalSince(session.lastSampleDate)
             if gap > Self.staleSessionGap {
@@ -1292,9 +1349,36 @@ extension BBVehicle {
             session.lastSampleDate = sampleDate
             try? context.save()
         } else if let session = openSession {
-            session.endPercentage = max(session.endPercentage, percentage)
-            session.endDate = max(session.lastSampleDate, sampleDate)
-            session.lastSampleDate = max(session.lastSampleDate, sampleDate)
+            // BlueLink occasionally emits a transient `charging = false`
+            // response during an uninterrupted charge. Never let an older or
+            // replayed status close a newer active session.
+            guard sampleDate > session.lastSampleDate else { return }
+
+            if let pendingStopDate = session.pendingStopDate {
+                let observedAt = session.pendingStopObservedAt ?? pendingStopDate
+                let hasNewerVehicleSample = sampleDate > pendingStopDate
+                let repeatedStopWasStable = sampleDate == pendingStopDate
+                    && status.lastUpdated.timeIntervalSince(observedAt) >= Self.stopConfirmationDelay
+                guard hasNewerVehicleSample || repeatedStopWasStable else { return }
+
+                session.endPercentage = max(
+                    session.endPercentage,
+                    session.pendingStopPercentage ?? percentage,
+                    percentage
+                )
+                session.endDate = pendingStopDate
+                session.lastSampleDate = pendingStopDate
+                session.pendingStopDate = nil
+                session.pendingStopObservedAt = nil
+                session.pendingStopPercentage = nil
+            } else {
+                // Persist the candidate so debounce works across app, widget,
+                // Watch, and Shortcuts processes.
+                session.pendingStopDate = sampleDate
+                session.pendingStopObservedAt = status.lastUpdated
+                session.pendingStopPercentage = percentage
+                session.endPercentage = max(session.endPercentage, percentage)
+            }
             try? context.save()
         }
     }
