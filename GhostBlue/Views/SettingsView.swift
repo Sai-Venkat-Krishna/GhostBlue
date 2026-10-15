@@ -40,40 +40,6 @@ struct SettingsView: View {
     var body: some View {
         NavigationView {
             List {
-                // Vehicles section for display management
-                let allVehicles = displayedVehicles
-                if !allVehicles.isEmpty {
-                    Section {
-                        ForEach(displayedVehicles, id: \.id) { bbVehicle in
-                            NavigationLink(destination: VehicleInfoView(
-                                bbVehicle: bbVehicle,
-                            )) {
-                                VStack(alignment: .leading) {
-                                    Text(bbVehicle.displayName)
-                                        .font(.headline)
-                                    Text("VIN: \(bbVehicle.vin)")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        }
-                        .onMove(perform: moveVehicles)
-                        .onDelete(perform: hideVehicles)
-                    } header: {
-                        Text("Vehicles")
-                    }
-                }
-
-                Section {
-                    NavigationLink {
-                        OwnershipHubView(vehicles: displayedVehicles)
-                    } label: {
-                        Label("Vehicle Center", systemImage: "car.2.fill")
-                    }
-                } footer: {
-                    Text("Smart alerts, remote activity, charging intelligence, maintenance, automations, privacy, and setup.")
-                }
-
                 Section {
                     ForEach(accounts) { account in
                         NavigationLink(destination: AccountInfoView(
@@ -156,6 +122,12 @@ struct SettingsView: View {
                         ForEach(VehicleHeroAlignment.allCases) { alignment in
                             Text(alignment.title).tag(alignment)
                         }
+                    }
+
+                    NavigationLink {
+                        HomeLayoutEditorView(order: $appSettings.homeSectionOrder)
+                    } label: {
+                        Label("Home Layout", systemImage: "square.grid.2x2")
                     }
                 } header: {
                     Text("Appearance")
@@ -248,6 +220,31 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    NavigationLink {
+                        PrivacySecurityView()
+                    } label: {
+                        Label("Privacy & Security", systemImage: "lock.shield.fill")
+                    }
+
+                    NavigationLink {
+                        OwnershipSetupView(vehicles: displayedVehicles)
+                    } label: {
+                        Label("Setup Guide", systemImage: "checklist.checked")
+                    }
+
+                    NavigationLink {
+                        BackupRestoreView()
+                    } label: {
+                        Label("Backup & Restore", systemImage: "externaldrive.badge.timemachine")
+                    }
+
+                } header: {
+                    Text("Privacy & Setup")
+                } footer: {
+                    Text("Face ID, location privacy, data export and deletion, and the remaining setup steps for notifications, widgets, and Watch.")
+                }
+
+                Section {
                     NavigationLink(destination: TroubleshootingView()) {
                         Label("Troubleshooting", systemImage: "questionmark.circle")
                     }
@@ -328,38 +325,6 @@ struct SettingsView: View {
     private func deleteAccounts(offsets: IndexSet) {
         for index in offsets {
             BBAccount.removeAccount(accounts[index], modelContext: modelContext)
-        }
-    }
-
-    private func getSortedVehiclesForSettings() -> [BBVehicle] {
-        displayedVehicles
-    }
-
-    private func moveVehicles(from source: IndexSet, to destination: Int) {
-        var vehicles = Array(displayedVehicles)
-        vehicles.move(fromOffsets: source, toOffset: destination)
-
-        // Update sort orders based on new positions
-        for (index, vehicle) in vehicles.enumerated() {
-            vehicle.sortOrder = index
-        }
-
-        do {
-            try modelContext.save()
-        } catch {
-            BBLogger.error(.app, "SettingsView: Failed to update vehicle order: \(error)")
-        }
-    }
-
-    private func hideVehicles(offsets: IndexSet) {
-        for index in offsets {
-            let bbVehicle = displayedVehicles[index]
-            bbVehicle.isHidden = true
-            do {
-                try modelContext.save()
-            } catch {
-                BBLogger.error(.app, "SettingsView: Failed to hide vehicle: \(error)")
-            }
         }
     }
 

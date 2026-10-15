@@ -18,7 +18,6 @@ struct ClimateSettingsSheet: View {
     @State private var showingNewPresetAlert = false
     @State private var newPresetName = ""
     @State private var newPresetIcon = "fan"
-    @State private var showingConfig = false
 
     private var vehiclePresets: [ClimatePreset] {
         allClimatePresets.filter { $0.vehicle?.id == vehicle.id }.sorted { $0.sortOrder < $1.sortOrder }
@@ -43,16 +42,6 @@ struct ClimateSettingsSheet: View {
                     }
                 }
 
-                if vehicle.generation < 3 {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button {
-                            showingConfig = true
-                        } label: {
-                            Image(systemName: "gear")
-                        }
-                    }
-                }
-
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         createNewPreset()
@@ -66,9 +55,6 @@ struct ClimateSettingsSheet: View {
         }
         .onAppear {
             createDefaultPresetIfNeeded()
-        }
-        .sheet(isPresented: $showingConfig) {
-            ClimateSettingsConfigSheet(bbVehicle: vehicle)
         }
     }
 }

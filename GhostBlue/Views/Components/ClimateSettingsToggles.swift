@@ -115,38 +115,3 @@ struct ClimateSettingsInfoSheet: View {
         }
     }
 }
-
-// MARK: - Quick-config half sheet
-
-/// Half-height sheet that presents the same toggles + info button.
-/// Used by the toolbar gear on `ClimateSettingsContent` so older
-/// vehicles can flip the seat-heat / duration switches without leaving
-/// the climate presets editor.
-struct ClimateSettingsConfigSheet: View {
-    let bbVehicle: BBVehicle
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    ClimateSettingsToggles(bbVehicle: bbVehicle)
-                } header: {
-                    HStack {
-                        Text("Climate Settings")
-                        ClimateSettingsInfoButton()
-                        Spacer()
-                    }
-                }
-            }
-            .navigationTitle("Climate Settings")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                }
-            }
-        }
-        .presentationDetents([.medium])
-    }
-}

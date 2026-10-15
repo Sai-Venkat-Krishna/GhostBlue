@@ -26,14 +26,9 @@ struct HomeView: View {
     @State private var appSettings = AppSettings.shared
 
     @State private var showingSettings = false
-    @State private var showingVehicleInfo = false
-    @State private var showingAccountInfo = false
-    @State private var showingHTTPLogs = false
-    @State private var showingVehicleConfiguration = false
-    @State private var showingHomeLayout = false
     @State private var showingOwnershipHub = false
     @State private var isEditingHome = false
-    @Query(sort: \ChargeSession.startDate, order: .reverse)
+    @Query(filter: #Predicate<ChargeSession> { $0.endDate == nil }, sort: \ChargeSession.startDate, order: .reverse)
     private var allChargeSessions: [ChargeSession]
 
     @State private var isRefreshing = false
@@ -49,6 +44,8 @@ struct HomeView: View {
     @State private var mfaState = MFAFlowState()
     @State private var cardsVisible = false
     @State private var refreshTask: Task<Void, Never>?
+    @State private var refreshTaskVIN: String?
+    @State private var refreshTaskIsForced = false
 
     @Namespace private var transition
 
@@ -72,18 +69,6 @@ struct HomeView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView()
         }
-        .sheet(isPresented: $showingVehicleInfo) {
-            if let bbVehicle {
-                NavigationView {
-                    VehicleInfoView(bbVehicle: bbVehicle)
-                        .toolbar {
-                            ToolbarItem(placement: .navigationBarLeading) {
-                                Button("Done") { showingVehicleInfo = false }
-                            }
-                        }
-                }
-            }
-        }
         .sheet(isPresented: $showingOwnershipHub) {
             NavigationStack {
                 OwnershipHubView(vehicles: displayedVehicles, initialVehicle: bbVehicle)
@@ -93,47 +78,6 @@ struct HomeView: View {
                         }
                     }
             }
-        }
-        .sheet(isPresented: $showingAccountInfo) {
-            if let account = bbVehicle?.account {
-                NavigationView {
-                    AccountInfoView(account: account)
-                        .toolbar {
-                            ToolbarItem(placement: .navigationBarLeading) {
-                                Button("Done") { showingAccountInfo = false }
-                            }
-                        }
-                }
-            }
-        }
-        .sheet(isPresented: $showingHTTPLogs) {
-            if let account = bbVehicle?.account {
-                NavigationView {
-                    HTTPLogView(accountId: account.id, transition: transition)
-                        .toolbar {
-                            ToolbarItem(placement: .navigationBarLeading) {
-                                Button("Done") { showingHTTPLogs = false }
-                            }
-                        }
-                }
-            }
-        }
-        .sheet(isPresented: $showingVehicleConfiguration) {
-            if let bbVehicle, bbVehicle.account?.brandEnum == .fake {
-                NavigationView {
-                    FakeVehicleDetailView(vehicle: bbVehicle)
-                        .navigationTitle("Configure Vehicle")
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .navigationBarLeading) {
-                                Button("Done") { showingVehicleConfiguration = false }
-                            }
-                        }
-                }
-            }
-        }
-        .sheet(isPresented: $showingHomeLayout) {
-            HomeLayoutEditorView(order: $appSettings.homeSectionOrder)
         }
         .sheet(isPresented: $showingErrorDetails) {
             if let lastActionError {
@@ -257,15 +201,8 @@ struct HomeView: View {
             HomeMoreActionsButton(
                 coordinate: appSettings.hideVehicleLocation ? nil : bbVehicle.coordinate,
                 destinationName: bbVehicle.displayName,
-                showsDebugActions: appSettings.debugModeEnabled,
-                showsFakeVehicleConfiguration: bbVehicle.account?.brandEnum == .fake,
-                onVehicleInfo: { showingVehicleInfo = true },
                 onVehicleCenter: { showingOwnershipHub = true },
-                onAccountInfo: { showingAccountInfo = true },
-                onHTTPLogs: { showingHTTPLogs = true },
-                onConfigureVehicle: { showingVehicleConfiguration = true },
                 onSettings: { showingSettings = true },
-                onCustomizeHome: { showingHomeLayout = true },
                 onEditHome: { isEditingHome = true }
             )
         }
@@ -415,40 +352,22 @@ struct HomeView: View {
             )
         }
         .gbGlassCard(radius: GBDesign.heroRadius)
-        .accessibilityElement(children: .combine)
+        // `.contain`, not `.combine`: the render's controls have to stay
+        // reachable as their own VoiceOver elements.
+        .accessibilityElement(children: .contain)
         .accessibilityLabel(vehicleHeroAccessibilityLabel(for: bbVehicle))
     }
 
+    /// The render is the primary control surface: live state is drawn on
+    /// the vehicle and the door, glass and charge port are tappable. The
+    /// buttons below remain a second way to reach the same commands.
     private func vehicleHeroArtwork(for vehicle: BBVehicle) -> some View {
-        ZStack {
-            Ellipse()
-                .fill(.black.opacity(0.38))
-                .frame(maxWidth: 220, maxHeight: 24)
-                .blur(radius: 8)
-                .offset(y: appSettings.vehicleHeroSize.imageHeight * 0.31)
-
-            HomeVehicleImageView(
-                modelName: vehicle.model,
-                colorName: vehicle.vehicleImageColor.rawValue
-            )
-            .frame(
-                maxWidth: .infinity,
-                alignment: appSettings.vehicleHeroAlignment.alignment
-            )
-            .frame(height: appSettings.vehicleHeroSize.imageHeight)
-            .shadow(
-                color: vehicleImageGlow(for: vehicle),
-                radius: vehicle.evStatus?.charging == true ? 28 : 18,
-                y: 8
-            )
-
-            if vehicle.evStatus?.charging == true {
-                ChargingFlowIndicator(tint: .green)
-                    .frame(maxWidth: 180)
-                    .offset(y: appSettings.vehicleHeroSize.imageHeight * 0.34)
-            }
-        }
-        .frame(maxWidth: .infinity)
+        VehicleHeroControlSurface(
+            bbVehicle: vehicle,
+            heroSize: appSettings.vehicleHeroSize,
+            heroAlignment: appSettings.vehicleHeroAlignment
+        )
+        .accessibilityElement(children: .contain)
     }
 
     private func vehicleHeroAccessibilityLabel(for vehicle: BBVehicle) -> String {
@@ -460,18 +379,6 @@ struct HomeView: View {
             return "\(vehicle.model), \(state.title), range \(gasRange.range.length.formatted())"
         }
         return "\(vehicle.model), \(state.title)"
-    }
-
-    private func vehicleImageGlow(for vehicle: BBVehicle) -> Color {
-        if vehicle.doorOpen?.anyOpen == true
-            || vehicle.hoodOpen == true
-            || vehicle.trunkOpen == true
-            || vehicle.tirePressureWarning?.hasWarning == true {
-            return .orange.opacity(0.45)
-        }
-        if vehicle.evStatus?.charging == true { return .green.opacity(0.48) }
-        if vehicle.climateStatus?.airControlOn == true { return .cyan.opacity(0.42) }
-        return appSettings.accentColor.opacity(0.25)
     }
 
     private func vehicleImageState(
@@ -1045,6 +952,7 @@ struct HomeView: View {
 
     @ViewBuilder
     private func chargingCompletionDetails(for vehicle: BBVehicle) -> some View {
+        ChargingStatusSummary(vehicle: vehicle)
         if let status = vehicle.evStatus, status.charging {
             let current = min(max(status.evRange.percentage, 0), 100)
             let target = min(max(status.currentTargetSOC ?? 100, current), 100)
@@ -1489,15 +1397,22 @@ struct HomeView: View {
         guard let bbVehicle else { return }
 
         // Deduplicate: reuse the in-flight refresh if one is already running
-        if let task = refreshTask {
-            return await task.value
+        if let task = refreshTask, refreshTaskVIN == bbVehicle.vin {
+            let wasForced = refreshTaskIsForced
+            await task.value
+            if !forced || wasForced { return }
         }
+        guard !Task.isCancelled else { return }
+        if !forced, !VehicleRefreshPolicy.shouldRefresh(lastFetch: bbVehicle.lastUpdated, interval: 300) { return }
         let task = Task {
             await executeRefresh(for: bbVehicle, forced: forced)
         }
         refreshTask = task
+        refreshTaskVIN = bbVehicle.vin
+        refreshTaskIsForced = forced
         await task.value
         refreshTask = nil
+        refreshTaskVIN = nil
     }
 
     @MainActor
@@ -1767,15 +1682,8 @@ struct EVRangeHero: View {
 private struct HomeMoreActionsButton: View {
     let coordinate: CLLocationCoordinate2D?
     let destinationName: String
-    let showsDebugActions: Bool
-    let showsFakeVehicleConfiguration: Bool
-    let onVehicleInfo: () -> Void
     let onVehicleCenter: () -> Void
-    let onAccountInfo: () -> Void
-    let onHTTPLogs: () -> Void
-    let onConfigureVehicle: () -> Void
     let onSettings: () -> Void
-    let onCustomizeHome: () -> Void
     let onEditHome: () -> Void
 
     @State private var showingActions = false
@@ -1808,20 +1716,8 @@ private struct HomeMoreActionsButton: View {
                 }
             }
 
-            Button("Vehicle Info", action: onVehicleInfo)
             Button("Vehicle Center", action: onVehicleCenter)
-            Button("Account Info", action: onAccountInfo)
-
-            if showsDebugActions {
-                Button("HTTP Logs", action: onHTTPLogs)
-            }
-
-            if showsFakeVehicleConfiguration {
-                Button("Configure Vehicle", action: onConfigureVehicle)
-            }
-
             Button("Settings", action: onSettings)
-            Button("Customize Home", action: onCustomizeHome)
             Button("Edit on Home", action: onEditHome)
             Button("Cancel", role: .cancel) {}
         }
@@ -1838,41 +1734,6 @@ private struct VehicleBriefingItem: Identifiable {
     /// Stable across dashboard state updates so SwiftUI can reuse the row
     /// instead of tearing it down whenever a header control is tapped.
     var id: String { "\(category)|\(title)" }
-}
-
-private struct ChargingFlowIndicator: View {
-    let tint: Color
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var flowOffset: CGFloat = -58
-
-    var body: some View {
-        ZStack {
-            Capsule()
-                .stroke(tint.opacity(0.26), style: StrokeStyle(lineWidth: 2, dash: [4, 6]))
-
-            Image(systemName: "bolt.fill")
-                .font(.caption.bold())
-                .foregroundStyle(tint)
-                .shadow(color: tint.opacity(0.7), radius: 6)
-                .offset(x: reduceMotion ? 0 : flowOffset)
-        }
-        .frame(height: 22)
-        .clipShape(Capsule())
-        .accessibilityHidden(true)
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.linear(duration: 1.45).repeatForever(autoreverses: false)) {
-                flowOffset = 58
-            }
-        }
-        .onChange(of: reduceMotion) { _, enabled in
-            flowOffset = enabled ? 0 : -58
-            guard !enabled else { return }
-            withAnimation(.linear(duration: 1.45).repeatForever(autoreverses: false)) {
-                flowOffset = 58
-            }
-        }
-    }
 }
 
 // MARK: - Fuel Range Hero

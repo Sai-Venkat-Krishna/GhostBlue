@@ -20,6 +20,28 @@ struct DiagnosticInfo {
     let accounts: [AccountDiagnostic]
     let vehicles: [VehicleDiagnostic]
     let cloudKitStatus: CloudKitDiagnostic?
+    let storage: StorageDiagnostic
+
+    /// Where this build is actually reading and writing, and how much is in
+    /// there. Two installs that share a bundle id and app group share one
+    /// store, so these counts are the quickest way to tell whether a second
+    /// copy of the data exists at all.
+    struct StorageDiagnostic {
+        let storePath: String
+        let storeKind: String
+        let fileSizeBytes: Int64
+        let chargeSessions: Int
+        let trips: Int
+        let climatePresets: Int
+        let httpLogs: Int
+        let remoteCommands: Int
+        let maintenanceReminders: Int
+        let automations: Int
+
+        var formattedSize: String {
+            ByteCountFormatter.string(fromByteCount: fileSizeBytes, countStyle: .file)
+        }
+    }
 
     struct AccountDiagnostic {
         let id: UUID
@@ -88,6 +110,7 @@ struct DiagnosticInfo {
         containerURL = context.container.configurations.first?.url.path
 
         let cloudKitStatus: CloudKitDiagnostic? = await collectCloudKitStatus(from: context)
+        let storage = collectStorage(from: context, storePath: containerURL)
 
         return DiagnosticInfo(
             timestamp: Date(),
@@ -98,7 +121,48 @@ struct DiagnosticInfo {
             hiddenVehicleCount: allVehicles.filter { $0.isHidden }.count,
             accounts: accountDiagnostics,
             vehicles: vehicleDiagnostics,
-            cloudKitStatus: cloudKitStatus
+            cloudKitStatus: cloudKitStatus,
+            storage: storage
+        )
+    }
+
+    @MainActor
+    private static func collectStorage(from context: ModelContext, storePath: String?) -> StorageDiagnostic {
+        func count<T: PersistentModel>(_: T.Type) -> Int {
+            (try? context.fetchCount(FetchDescriptor<T>())) ?? 0
+        }
+
+        let path = storePath ?? "Unknown"
+        let kind: String
+        if path == "Unknown" {
+            kind = "Unknown"
+        } else if path.contains("/tmp/GhostBlue_Shared") {
+            kind = "Simulator shared file"
+        } else if path.contains("Group Containers") || path.contains("group.") {
+            kind = "App Group container"
+        } else {
+            kind = "App sandbox"
+        }
+
+        var bytes: Int64 = 0
+        if path != "Unknown" {
+            for suffix in ["", "-wal", "-shm"] {
+                let attrs = try? FileManager.default.attributesOfItem(atPath: path + suffix)
+                bytes += (attrs?[.size] as? NSNumber)?.int64Value ?? 0
+            }
+        }
+
+        return StorageDiagnostic(
+            storePath: path,
+            storeKind: kind,
+            fileSizeBytes: bytes,
+            chargeSessions: count(ChargeSession.self),
+            trips: count(TripRecord.self),
+            climatePresets: count(ClimatePreset.self),
+            httpLogs: count(BBHTTPLog.self),
+            remoteCommands: count(RemoteCommandActivity.self),
+            maintenanceReminders: count(MaintenanceReminder.self),
+            automations: count(VehicleAutomation.self)
         )
     }
 
@@ -178,6 +242,18 @@ struct DiagnosticInfo {
         • Hidden Vehicles: \(hiddenVehicleCount)
         • Container: \(containerURL ?? "Unknown")
 
+        Storage:
+        • Store: \(storage.storeKind)
+        • Path: \(storage.storePath)
+        • Size on disk: \(storage.formattedSize)
+        • Charge sessions: \(storage.chargeSessions)
+        • Trips: \(storage.trips)
+        • Climate presets: \(storage.climatePresets)
+        • Remote commands: \(storage.remoteCommands)
+        • Maintenance reminders: \(storage.maintenanceReminders)
+        • Automations: \(storage.automations)
+        • HTTP logs: \(storage.httpLogs)
+
         """
 
         if let cloudKit = cloudKitStatus {
@@ -249,6 +325,8 @@ struct DiagnosticInfoView: View {
                 List {
                     summarySection(diagnosticInfo)
 
+                    storageSection(diagnosticInfo.storage)
+
                     if let cloudKit = diagnosticInfo.cloudKitStatus {
                         cloudKitSection(cloudKit)
                     }
@@ -309,6 +387,38 @@ struct DiagnosticInfoView: View {
             diagnosticRow("Container", info.containerURL ?? "Unknown")
         } header: {
             Text("Summary")
+        }
+    }
+
+    @ViewBuilder
+    private func storageSection(_ storage: DiagnosticInfo.StorageDiagnostic) -> some View {
+        Section {
+            diagnosticRow("Store", storage.storeKind)
+            diagnosticRow("Size on disk", storage.formattedSize)
+            diagnosticRow("Charge Sessions", "\(storage.chargeSessions)")
+            diagnosticRow("Trips", "\(storage.trips)")
+            diagnosticRow("Climate Presets", "\(storage.climatePresets)")
+            diagnosticRow("Remote Commands", "\(storage.remoteCommands)")
+            diagnosticRow("Maintenance Reminders", "\(storage.maintenanceReminders)")
+            diagnosticRow("Automations", "\(storage.automations)")
+            diagnosticRow("HTTP Logs", "\(storage.httpLogs)")
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Path")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                #if os(watchOS)
+                    Text(storage.storePath)
+                        .font(.caption2.monospaced())
+                #else
+                    Text(storage.storePath)
+                        .font(.caption2.monospaced())
+                        .textSelection(.enabled)
+                #endif
+            }
+        } header: {
+            Text("Storage")
+        } footer: {
+            Text("Every build sharing this bundle identifier and app group reads this same store.")
         }
     }
 

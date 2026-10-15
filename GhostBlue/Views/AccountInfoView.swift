@@ -85,13 +85,6 @@ struct AccountInfoView: View {
                 Text("Credentials")
             }
 
-            if AppSettings.shared.debugModeEnabled {
-                Section {
-                    NavigationLink("View HTTP Logs", destination: HTTPLogView(accountId: account.id))
-                } header: {
-                    Text("Debugging")
-                }
-            }
 
             // Fake vehicle management for fake accounts
             if account.brandEnum == .fake {

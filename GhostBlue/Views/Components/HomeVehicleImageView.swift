@@ -14,6 +14,9 @@ import UIKit
 struct HomeVehicleImageView: View {
     let modelName: String
     var colorName: String = VehicleImageColor.white.rawValue
+    /// Reports the loaded render's pixel size (nil while the SF Symbol
+    /// fallback is showing) so callers can map overlays onto the artwork.
+    var onImageSize: ((CGSize?) -> Void)?
     @State private var image: UIImage?
     @State private var isLoading = true
 
@@ -54,6 +57,7 @@ struct HomeVehicleImageView: View {
                 color: colorName
             )
             isLoading = false
+            onImageSize?(image?.size)
         }
     }
 }

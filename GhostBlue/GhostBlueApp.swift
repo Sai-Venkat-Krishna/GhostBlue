@@ -45,6 +45,12 @@ struct GhostBlueApp: App {
             cleanupOrphanedVehicles(container: container)
             cleanupOrphanedClimatePresets(container: container)
 
+            // With iCloud mirroring on, the same car arrives from another
+            // device as a second row with its own UUID — CloudKit cannot
+            // enforce uniqueness. Collapse by VIN before any view reads the
+            // store, so duplicates never reach the UI.
+            StoreReconciler.reconcile(in: container.mainContext)
+
             return container
         } catch {
             BBLogger.error(.app, "Failed to create ModelContainer: \(error)")
@@ -60,6 +66,10 @@ struct GhostBlueApp: App {
                 }
                 .task {
                     await reconcileEnabledSmartChargingVehicles()
+                    await VehicleRefreshPolicy.run(interval: { 60 }) {
+                        guard scenePhase == .active else { return }
+                        await reconcileEnabledSmartChargingVehicles()
+                    }
                 }
                 .onChange(of: scenePhase) { _, newPhase in
                     guard newPhase == .active else { return }
@@ -173,7 +183,8 @@ struct GhostBlueApp: App {
 
         for vehicle in vehicles {
             if let lastRun = vehicle.smartChargingLastRunAt,
-               Date().timeIntervalSince(lastRun) < 120 {
+               Date().timeIntervalSince(lastRun) < 300,
+               lastRun >= (SDGESmartChargingSchedule.mostRecentTransition(at: Date()) ?? .distantPast) {
                 continue
             }
             guard let account = vehicle.account else { continue }

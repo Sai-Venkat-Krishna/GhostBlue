@@ -114,17 +114,6 @@ struct VehicleInfoView: View {
                 }
             }
 
-            // Climate Settings — per-vehicle toggles (seat heat for older vehicles + show duration)
-            Section {
-                ClimateSettingsToggles(bbVehicle: bbVehicle)
-            } header: {
-                HStack {
-                    Text("Climate Settings")
-                    ClimateSettingsInfoButton()
-                    Spacer()
-                }
-            }
-
             // Powertrain override — pin gas / electric / phev when the API misreports.
             Section {
                 Picker("Powertrain", selection: Binding(
@@ -145,8 +134,6 @@ struct VehicleInfoView: View {
                 Text("Use this when the API misreports the powertrain (e.g. a real EV showing as PHEV).")
             }
 
-            ClimatePresetsSection(bbVehicle: bbVehicle, vehiclePresets: vehiclePresets)
-
             // EV Settings (only for electric vehicles)
             if bbVehicle.fuelType.hasElectricCapability {
                 Section("EV Settings") {
@@ -159,32 +146,6 @@ struct VehicleInfoView: View {
                     )) {
                         ForEach(ChargePortType.allCases, id: \.self) { portType in
                             Label(portType.displayName, systemImage: portType.dcPlugIcon).tag(portType)
-                        }
-                    }
-
-                    NavigationLink(destination: ChargeLimitSettingsContent(vehicle: bbVehicle)) {
-                        HStack {
-                            Text("Charge Limits")
-                            Spacer()
-                            if let evStatus = bbVehicle.evStatus,
-                               let acTarget = evStatus.targetSocAC,
-                               let dcTarget = evStatus.targetSocDC {
-                                Text("AC: \(Int(acTarget))% / DC: \(Int(dcTarget))%")
-                                    .foregroundColor(.secondary)
-                                    .font(.caption)
-                            }
-                        }
-                    }
-
-                    NavigationLink(destination: ChargingCostSettingsView(vehicle: bbVehicle)) {
-                        HStack {
-                            Label("Charging Costs", systemImage: "dollarsign.circle")
-                            Spacer()
-                            if let homeRate = bbVehicle.offPeakElectricityRatePerKWh {
-                                Text("Home \(homeRate.formatted(.currency(code: Locale.current.currency?.identifier ?? "USD")))")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
                         }
                     }
 
@@ -249,8 +210,6 @@ struct VehicleInfoView: View {
             #endif
 
         }
-        .navigationTitle("Vehicle Info")
-        .navigationBarTitleDisplayMode(.inline)
         .overlay(alignment: .top) {
             if showingCopiedMessage {
                 Text("VIN copied to clipboard")
@@ -263,7 +222,7 @@ struct VehicleInfoView: View {
                     .zIndex(1)
             }
         }
-        .navigationTitle("Vehicle Info")
+        .navigationTitle("Overview")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             customName = bbVehicle.customName ?? ""
@@ -309,34 +268,6 @@ struct VehicleInfoView: View {
             )
             WidgetCenter.shared.reloadAllTimelines()
             LiveActivityManager.shared.refreshAppearance(for: bbVehicle)
-        }
-    }
-}
-
-// MARK: - Seat Heat Info Button
-
-private struct SeatHeatInfoButton: View {
-    @State private var showingInfo = false
-
-    var body: some View {
-        Button {
-            showingInfo = true
-        } label: {
-            Image(systemName: "info.circle")
-                .foregroundColor(.blue)
-        }
-        .buttonStyle(.plain)
-        .alert("Seat Heat Controls", isPresented: $showingInfo) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(
-                "Seat heating and cooling controls are automatically available for newer " +
-                "vehicles (generation 3+). Some older vehicles also support these features " +
-                "but require manual enabling.\n\n" +
-                "If your vehicle has heated or ventilated seats, you can enable this option " +
-                "to show seat controls in your climate presets. If your vehicle doesn't " +
-                "support these features, the controls will have no effect."
-            )
         }
     }
 }

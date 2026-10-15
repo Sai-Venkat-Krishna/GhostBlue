@@ -35,6 +35,33 @@ func getSimulatorStoreURL() -> URL {
     return URL(fileURLWithPath: sharedSimulatorPath).appendingPathComponent("GhostBlue.sqlite")
 }
 
+/// This account own iCloud container. The value that shipped here
+/// previously belonged to the upstream author, so sync could never have
+/// worked against it.
+///
+/// Dormant for now: the signing team is a personal (free) Apple ID team,
+/// and personal teams cannot hold the iCloud capability at all — adding
+/// the entitlement makes the provisioning profile fail outright. Joining
+/// the paid Apple Developer Program is the only way to switch this on,
+/// and it then needs the iCloud container plus the CloudKit service back
+/// in GhostBlue.entitlements and a toggle bound to `iCloudSyncEnabled`.
+/// Until then `StoreReconciler` and the backup/restore flow are what keep
+/// two stores in agreement, both keyed on VIN.
+let cloudKitContainerIdentifier = "iCloud.com.saivenkatkrishna.GhostBlue"
+
+/// Lives here rather than on `AppSettings`, which is main-actor isolated:
+/// container creation happens off the main actor in widget and intent
+/// processes.
+let iCloudSyncEnabledDefaultsKey = "ICloudSyncEnabled"
+
+/// Read from the shared suite rather than `AppSettings` so widget and
+/// intent processes, which build a container without ever constructing
+/// `AppSettings`, agree with the app about which store to open.
+func isICloudSyncEnabled() -> Bool {
+    UserDefaults(suiteName: "group.com.saivenkatkrishna.ghostblue.shared")?
+        .bool(forKey: iCloudSyncEnabledDefaultsKey) ?? false
+}
+
 func getAppGroupStoreURL() throws -> URL {
     let appGroupID = "group.com.saivenkatkrishna.ghostblue.shared"
     if let appGroupURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID) {
@@ -143,22 +170,41 @@ func createSharedModelContainer(enableCloudKit: Bool = false) throws -> ModelCon
         RemoteCommandActivity.self,
         MaintenanceReminder.self,
         VehicleAutomation.self
-    ], version: .init(1, 0, 17))
+    ], version: .init(1, 0, 18))
+
+    #if DEBUG
+    if ProcessInfo.processInfo.environment["GHOSTBLUE_TESTING"] == "1" {
+        return try ModelContainer(for: schema, configurations: [
+            ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+        ])
+    }
+    #endif
 
     #if targetEnvironment(simulator)
         let storeURL = getSimulatorStoreURL()
         return try createContainer(storeURL: storeURL, schema: schema, cloudKitDatabase: .none)
     #else
-        if enableCloudKit {
+        let storeURL = try getAppGroupStoreURL()
+
+        // Sync keeps the existing app group store file and simply mirrors it.
+        // Letting CloudKit pick its own default location would strand
+        // everything already saved on the device, which is the whole problem
+        // this is meant to solve.
+        if enableCloudKit || isICloudSyncEnabled() {
             let cloudConfig = ModelConfiguration(
-                "iCloud.com.markschmidt.GhostBlue",
-                cloudKitDatabase: .automatic
+                url: storeURL,
+                cloudKitDatabase: .private(cloudKitContainerIdentifier)
             )
             if let container = try? ModelContainer(for: schema, configurations: [cloudConfig]) {
                 return container
             }
+            BBLogger.warning(
+                .app,
+                "GhostBlue: iCloud sync is on but the CloudKit container could not be opened; "
+                    + "falling back to local storage"
+            )
         }
-        let storeURL = try getAppGroupStoreURL()
+
         return try createContainer(storeURL: storeURL, schema: schema, cloudKitDatabase: .none)
     #endif
 }

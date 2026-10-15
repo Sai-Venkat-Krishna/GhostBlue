@@ -14,6 +14,7 @@ import UserNotifications
 
 struct OwnershipHubView: View {
     let vehicles: [BBVehicle]
+    @Environment(\.modelContext) private var modelContext
     @State private var selectedVIN: String
     @State private var appSettings = AppSettings.shared
 
@@ -35,7 +36,44 @@ struct OwnershipHubView: View {
             }
 
             if let vehicle {
-                Section("Vehicle center") {
+                Section("Vehicle") {
+                    NavigationLink {
+                        VehicleInfoView(bbVehicle: vehicle)
+                    } label: {
+                        OwnershipDestinationLabel(
+                            icon: "car.fill",
+                            color: .blue,
+                            title: "Overview",
+                            detail: "Name, appearance, powertrain, widgets, and VIN"
+                        )
+                    }
+
+                    NavigationLink {
+                        VehicleClimateSettingsView(bbVehicle: vehicle)
+                    } label: {
+                        OwnershipDestinationLabel(
+                            icon: "fan.fill",
+                            color: .teal,
+                            title: "Climate",
+                            detail: "Seat heat availability and preset duration"
+                        )
+                    }
+
+                    if vehicle.fuelType.hasElectricCapability {
+                        NavigationLink {
+                            ChargingIntelligenceView(vehicle: vehicle)
+                        } label: {
+                            OwnershipDestinationLabel(
+                                icon: "bolt.fill",
+                                color: .green,
+                                title: "Charging",
+                                detail: "Limits, costs, smart schedule, and budget"
+                            )
+                        }
+                    }
+                }
+
+                Section("Intelligence") {
                     NavigationLink {
                         SmartAlertRulesView(vehicle: vehicle)
                     } label: {
@@ -56,19 +94,6 @@ struct OwnershipHubView: View {
                             title: "Remote activity",
                             detail: "Commands from iPhone, widgets, shortcuts, and Watch"
                         )
-                    }
-
-                    if vehicle.fuelType.hasElectricCapability {
-                        NavigationLink {
-                            ChargingIntelligenceView(vehicle: vehicle)
-                        } label: {
-                            OwnershipDestinationLabel(
-                                icon: "chart.bar.xaxis.ascending.badge.clock",
-                                color: .green,
-                                title: "Charging intelligence",
-                                detail: "Tariffs, budget, locations, and station discovery"
-                            )
-                        }
                     }
 
                     NavigationLink {
@@ -95,31 +120,67 @@ struct OwnershipHubView: View {
                 }
             }
 
-            Section("Privacy and setup") {
-                NavigationLink {
-                    PrivacySecurityView()
-                } label: {
-                    OwnershipDestinationLabel(
-                        icon: "lock.shield.fill",
-                        color: .green,
-                        title: "Privacy & security",
-                        detail: "Face ID, location privacy, export, and deletion"
-                    )
-                }
-
-                NavigationLink {
-                    OwnershipSetupView(vehicles: vehicles)
-                } label: {
-                    OwnershipDestinationLabel(
-                        icon: "checklist.checked",
-                        color: appSettings.accentColor,
-                        title: "Setup guide",
-                        detail: "Finish notifications, widgets, Watch, and demo mode"
-                    )
+            if !vehicles.isEmpty {
+                Section {
+                    ForEach(vehicles, id: \.id) { entry in
+                        Button {
+                            selectedVIN = entry.vin
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading) {
+                                    Text(entry.displayName)
+                                        .font(.headline)
+                                    Text("VIN: \(entry.vin)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if entry.vin == selectedVIN {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(appSettings.accentColor)
+                                }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .onMove(perform: moveVehicles)
+                    .onDelete(perform: hideVehicles)
+                } header: {
+                    Text("All vehicles")
+                } footer: {
+                    Text("Drag to reorder. Swipe to hide a vehicle from Home, widgets, and Watch.")
                 }
             }
+
         }
         .navigationTitle("Vehicle Center")
+    }
+
+    private func moveVehicles(from source: IndexSet, to destination: Int) {
+        var reordered = Array(vehicles)
+        reordered.move(fromOffsets: source, toOffset: destination)
+
+        for (index, vehicle) in reordered.enumerated() {
+            vehicle.sortOrder = index
+        }
+
+        do {
+            try modelContext.save()
+        } catch {
+            BBLogger.error(.app, "OwnershipHubView: Failed to update vehicle order: \(error)")
+        }
+    }
+
+    private func hideVehicles(offsets: IndexSet) {
+        for index in offsets {
+            vehicles[index].isHidden = true
+            do {
+                try modelContext.save()
+            } catch {
+                BBLogger.error(.app, "OwnershipHubView: Failed to hide vehicle: \(error)")
+            }
+        }
     }
 }
 
@@ -458,6 +519,14 @@ private struct ChargingIntelligenceView: View {
     @Environment(\.openURL) private var openURL
     @Query(sort: \ChargeSession.startDate, order: .reverse)
     private var allSessions: [ChargeSession]
+
+    init(vehicle: BBVehicle) {
+        self.vehicle = vehicle
+        let vin = vehicle.vin
+        let monthStart = Calendar.current.dateInterval(of: .month, for: Date())?.start ?? .distantPast
+        _allSessions = Query(filter: #Predicate<ChargeSession> { $0.vin == vin && $0.startDate >= monthStart },
+                             sort: \ChargeSession.startDate, order: .reverse)
+    }
     @State private var isReconcilingSmartCharging = false
     @State private var smartChargingRunMessage: String?
 
@@ -514,71 +583,36 @@ private struct ChargingIntelligenceView: View {
             }
 
             Section {
-                Toggle(
-                    "SDG&E smart charging",
-                    isOn: persistedBool(\.smartChargingEnabled)
-                )
-
-                if vehicle.smartChargingEnabled {
-                    LabeledContent("Hyundai baseline", value: "12:00 AM-2:00 PM")
-                    LabeledContent("Weekdays", value: "12-6 AM, 10 AM-2 PM")
-                    LabeledContent("Weekends & holidays", value: "12:00 AM-2:00 PM")
-
-                    Toggle(
-                        "Only control charging at home",
-                        isOn: persistedBool(\.smartChargingHomeOnly)
-                    )
-                    Stepper(
-                        "Charge target: \(vehicle.smartChargingTargetSOC)%",
-                        value: persistedInt(\.smartChargingTargetSOC),
-                        in: 50 ... 100,
-                        step: 10
-                    )
-
-                    if vehicle.smartChargingHomeOnly,
-                       vehicle.homeLatitude == nil || vehicle.homeLongitude == nil {
-                        Label(
-                            "Save your home location below before the automation can send commands.",
-                            systemImage: "exclamationmark.triangle.fill"
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                    }
-
-                    Button {
-                        reconcileSmartChargingNow()
-                    } label: {
-                        if isReconcilingSmartCharging {
-                            HStack {
-                                ProgressView()
-                                Text("Checking vehicle…")
-                            }
-                        } else {
-                            Label("Reconcile charging now", systemImage: "arrow.triangle.2.circlepath")
+                NavigationLink(destination: ChargeLimitSettingsContent(vehicle: vehicle)) {
+                    HStack {
+                        Label("Charge Limits", systemImage: "battery.100.bolt")
+                        Spacer()
+                        if let evStatus = vehicle.evStatus,
+                           let acTarget = evStatus.targetSocAC,
+                           let dcTarget = evStatus.targetSocDC {
+                            Text("AC: \(Int(acTarget))% / DC: \(Int(dcTarget))%")
+                                .foregroundColor(.secondary)
+                                .font(.caption)
                         }
                     }
-                    .disabled(isReconcilingSmartCharging)
+                }
 
-                    ShortcutsLink()
-
-                    if let message = smartChargingRunMessage ?? vehicle.smartChargingLastResult {
-                        Text(message)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    if let lastRun = vehicle.smartChargingLastRunAt {
-                        Text("Last checked \(lastRun, format: .relative(presentation: .named))")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                NavigationLink(destination: ChargingCostSettingsView(vehicle: vehicle)) {
+                    HStack {
+                        Label("Charging Costs", systemImage: "dollarsign.circle")
+                        Spacer()
+                        if let homeRate = vehicle.offPeakElectricityRatePerKWh {
+                            Text("Home \(homeRate.formatted(.currency(code: currencyCode)))")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             } header: {
-                Text("Charging schedule")
-            } footer: {
-                Text(
-                    "Keep Hyundai's Charge Schedule and ‘Charge only during Off-Peak’ enabled from 12:00 AM to 2:00 PM. In Shortcuts, run ‘Reconcile Smart Charging’ at 6:00 AM and 10:00 AM Monday-Friday. Optional daily midnight and 2:00 PM runs add recovery checks. SDG&E holidays are handled automatically."
-                )
+                Text("This vehicle")
             }
+
+            SmartChargingScheduleSection(vehicle: vehicle)
 
             Section {
                 OptionalCurrencyField(
@@ -588,6 +622,10 @@ private struct ChargingIntelligenceView: View {
                 OptionalCurrencyField(
                     title: "Home super off-peak / kWh",
                     value: optionalDouble(\.offPeakElectricityRatePerKWh)
+                )
+                OptionalCurrencyField(
+                    title: "Home on-peak / kWh",
+                    value: optionalDouble(\.peakElectricityRatePerKWh)
                 )
                 OptionalCurrencyField(
                     title: "DC fast default / kWh",
@@ -610,7 +648,7 @@ private struct ChargingIntelligenceView: View {
             } header: {
                 Text("Tariff")
             } footer: {
-                Text("Home sessions use the super-off-peak rate. DC sessions use the DC default. A session's actual receipt total can override either estimate in the Charging tab.")
+                Text("New home sessions save the tariff and split estimated costs across time periods. SDG&E on-peak is 4–9 PM. If no on-peak rate is set, the other-charging rate is used. DC sessions use the DC default. Receipt totals override estimates.")
             }
 
             Section {
@@ -690,7 +728,7 @@ private struct ChargingIntelligenceView: View {
                 }
             }
         }
-        .navigationTitle("Charging Intelligence")
+        .navigationTitle("Charging")
         .navigationBarTitleDisplayMode(.inline)
     }
 
@@ -1183,7 +1221,9 @@ private struct VehicleAutomationsView: View {
 
 // MARK: - Privacy & Setup
 
-private struct PrivacySecurityView: View {
+/// App-level, so it lives in Settings rather than Vehicle Center: it must
+/// stay reachable before any vehicle has loaded.
+struct PrivacySecurityView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var appSettings = AppSettings.shared
     @Query private var trips: [TripRecord]
@@ -1279,7 +1319,9 @@ private struct PrivacySecurityView: View {
     }
 }
 
-private struct OwnershipSetupView: View {
+/// App-level, so it lives in Settings rather than Vehicle Center: a new
+/// user needs the checklist precisely when no vehicle exists yet.
+struct OwnershipSetupView: View {
     let vehicles: [BBVehicle]
     @State private var appSettings = AppSettings.shared
 

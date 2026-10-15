@@ -441,6 +441,7 @@ class AppSettings {
     private let showShortTripsKey = "ShowShortTrips"
     private let lastViewedTripsDateKey = "LastViewedTripsDate"
     private let requireBiometricUnlockKey = "RequireBiometricUnlock"
+    private let iCloudSyncEnabledKey = iCloudSyncEnabledDefaultsKey
     private let hideVehicleLocationKey = "HideVehicleLocation"
     private let redactPrivateLocationsKey = "RedactPrivateLocations"
     private let quietHoursEnabledKey = "QuietHoursEnabled"
@@ -600,6 +601,14 @@ class AppSettings {
         didSet { userDefaults.set(requireBiometricUnlock, forKey: requireBiometricUnlockKey) }
     }
 
+    /// Read straight out of the shared suite by `createSharedModelContainer`,
+    /// which runs in widget and intent processes that never build an
+    /// `AppSettings`. Takes effect on the next launch, because the store a
+    /// container opens is fixed when it is created.
+    var iCloudSyncEnabled: Bool {
+        didSet { userDefaults.set(iCloudSyncEnabled, forKey: iCloudSyncEnabledKey) }
+    }
+
     var hideVehicleLocation: Bool {
         didSet { userDefaults.set(hideVehicleLocation, forKey: hideVehicleLocationKey) }
     }
@@ -737,6 +746,7 @@ class AppSettings {
             timeIntervalSince1970: userDefaults.double(forKey: lastViewedTripsDateKey)
         )
         requireBiometricUnlock = userDefaults.bool(forKey: requireBiometricUnlockKey)
+        iCloudSyncEnabled = userDefaults.bool(forKey: iCloudSyncEnabledKey)
         hideVehicleLocation = userDefaults.bool(forKey: hideVehicleLocationKey)
         if userDefaults.object(forKey: redactPrivateLocationsKey) == nil {
             redactPrivateLocations = true
