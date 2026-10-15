@@ -314,6 +314,8 @@ class BBVehicle {
     var syncDate: Date?
     var gasRange: VehicleStatus.FuelRange?
     var evStatus: VehicleStatus.EVStatus?
+    /// Persisted so app, Shortcuts and extensions agree on an unconfirmed stop.
+    var pendingChargingStopDate: Date?
     var location: VehicleStatus.Location?
     var lockStatus: VehicleStatus.LockStatus?
     var climateStatus: VehicleStatus.ClimateStatus?
@@ -343,6 +345,7 @@ class BBVehicle {
     /// Default public DC fast-charging price. Individual sessions can store
     /// an actual receipt total when a network's price differs by station.
     var dcFastChargingRatePerKWh: Double?
+    var peakElectricityRatePerKWh: Double?
     var offPeakStartHour: Int = 0
     var offPeakEndHour: Int = 6
     var monthlyChargingBudget: Double?
@@ -361,6 +364,9 @@ class BBVehicle {
     var smartChargingTargetSOC: Int = 80
     var smartChargingLastRunAt: Date?
     var smartChargingLastResult: String?
+    var smartChargingLastConfirmedAt: Date?
+    var smartChargingOverrideRaw: String?
+    var smartChargingOverrideExpiresAt: Date?
 
     // Smart alert rules. These are per vehicle so each car can have a
     // different notification policy.
@@ -543,7 +549,37 @@ class BBVehicle {
 
 extension BBVehicle {
     @MainActor
-    func updateStatus(with status: VehicleStatus) {
+    @discardableResult
+    func updateStatus(with status: VehicleStatus) -> VehicleStatus {
+        if let incoming = status.syncDate, let current = syncDate, incoming < current {
+            return statusForDisplay(fallback: status)
+        }
+        var accepted = status
+        if let incomingEV = status.evStatus {
+            let sampleDate = status.syncDate ?? status.lastUpdated
+            if !incomingEV.charging, evStatus?.charging == true {
+                if let candidate = pendingChargingStopDate, sampleDate > candidate {
+                    pendingChargingStopDate = nil
+                } else {
+                    if pendingChargingStopDate == nil { pendingChargingStopDate = sampleDate }
+                    // Keep the last confirmed state, but do not invent live
+                    // power or an ETA while confirmation is pending.
+                    accepted.evStatus = VehicleStatus.EVStatus(
+                        charging: true,
+                        chargeSpeed: 0,
+                        evRange: incomingEV.evRange,
+                        plugType: incomingEV.pluggedIn ? incomingEV.plugType : (evStatus?.plugType ?? .unplugged),
+                        chargeTime: .seconds(0),
+                        targetSocAC: incomingEV.targetSocAC ?? evStatus?.targetSocAC,
+                        targetSocDC: incomingEV.targetSocDC ?? evStatus?.targetSocDC
+                    )
+                }
+            } else {
+                pendingChargingStopDate = nil
+            }
+        } else {
+            accepted.evStatus = evStatus
+        }
         // Wake up any waiting status change tasks (cancel them so they can restart immediately)
         wakeUpStatusWaiters()
 
@@ -556,7 +592,7 @@ extension BBVehicle {
         if let gasRange = status.gasRange {
             self.gasRange = gasRange
         }
-        if let evStatus = status.evStatus {
+        if let evStatus = accepted.evStatus {
             self.evStatus = evStatus
         }
         // Only clear gas range for pure EVs (PHEVs retain both gas and EV range)
@@ -579,41 +615,81 @@ extension BBVehicle {
 
         // Fold this sample into the charge-session log
         recordChargingActivity(with: status)
-        evaluateSmartAlerts(with: status)
+        evaluateSmartAlerts(with: accepted)
 
         // Single hook covering every refresh path (periodic loop, manual
         // refresh, command polling, fake vehicles). Observers: ABRP telemetry
         // push and trip arrival detection. Foundation-only, so targets
         // without an observer are unaffected.
         NotificationCenter.default.post(name: .bbVehicleStatusUpdated, object: vin)
+        return accepted
+    }
+
+    func statusForDisplay(fallback status: VehicleStatus) -> VehicleStatus {
+        var result = status
+        result.lastUpdated = lastUpdated ?? status.lastUpdated
+        result.syncDate = syncDate
+        result.evStatus = evStatus
+        result.gasRange = gasRange
+        result.location = location ?? status.location
+        result.lockStatus = lockStatus ?? status.lockStatus
+        result.climateStatus = climateStatus ?? status.climateStatus
+        result.odometer = odometer
+        result.battery12V = battery12V
+        result.doorOpen = doorOpen
+        result.trunkOpen = trunkOpen
+        result.hoodOpen = hoodOpen
+        result.tirePressureWarning = tirePressureWarning
+        return result
     }
 
     // MARK: - Status Change Waiting
 
     // Simple actor to manage wake-up continuations
     private actor StatusWaitingManager {
-        private var wakeUpContinuations: [UUID: CheckedContinuation<Void, Never>] = [:]
+        private struct Waiter {
+            let vehicleId: UUID
+            let continuation: CheckedContinuation<Void, Error>
+        }
+        private var waiters: [UUID: Waiter] = [:]
+        private var timers: [UUID: Task<Void, Never>] = [:]
 
-        func setWakeUpContinuation(
-            for vehicleId: UUID,
-            continuation: CheckedContinuation<Void, Never>,
-        ) {
-            wakeUpContinuations[vehicleId] = continuation
+        func wait(vehicleId: UUID, seconds: Int) async throws {
+            let token = UUID()
+            try Task.checkCancellation()
+            try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                    if Task.isCancelled {
+                        continuation.resume(throwing: CancellationError())
+                        return
+                    }
+                    waiters[token] = Waiter(vehicleId: vehicleId, continuation: continuation)
+                    timers[token] = Task {
+                        do { try await Task.sleep(for: .seconds(max(0, seconds))) }
+                        catch { return }
+                        finish(token, cancelled: false)
+                    }
+                }
+            } onCancel: {
+                Task { await self.finish(token, cancelled: true) }
+            }
+        }
+
+        private func finish(_ token: UUID, cancelled: Bool) {
+            timers.removeValue(forKey: token)?.cancel()
+            guard let waiter = waiters.removeValue(forKey: token) else { return }
+            if cancelled { waiter.continuation.resume(throwing: CancellationError()) }
+            else { waiter.continuation.resume() }
         }
 
         func wakeUp(vehicleId: UUID) -> Bool {
-            if let continuation = wakeUpContinuations.removeValue(forKey: vehicleId) {
-                continuation.resume()
-                return true
-            }
-            return false
+            let tokens = waiters.filter { $0.value.vehicleId == vehicleId }.map(\.key)
+            for token in tokens { finish(token, cancelled: false) }
+            return !tokens.isEmpty
         }
 
         func clearWakeUp(for vehicleId: UUID) {
-            if let continuation = wakeUpContinuations.removeValue(forKey: vehicleId) {
-                // Resume the continuation to prevent leak
-                continuation.resume()
-            }
+            _ = wakeUp(vehicleId: vehicleId)
         }
     }
 
@@ -649,9 +725,6 @@ extension BBVehicle {
                 cached: false
             )
 
-            // Update the vehicle's status
-            updateStatus(with: updatedStatus)
-
             if condition(updatedStatus) {
                 print(
                     "✅ [BBVehicle] Status condition met for vehicle \(displayName)",
@@ -675,44 +748,7 @@ extension BBVehicle {
 
     @MainActor
     private func interruptibleSleep(seconds: Int) async throws {
-        let vehicleId = id
-
-        // Ensure any existing continuation is cleared before setting up a new one
-        await Self.statusWaitingManager.clearWakeUp(for: vehicleId)
-
-        try await withThrowingTaskGroup(of: Bool.self) { group in
-            // Add timer task
-            group.addTask {
-                try await Task.sleep(nanoseconds: UInt64(seconds) * 1_000_000_000)
-                return false // Timer completed normally
-            }
-
-            // Add wake-up task
-            group.addTask {
-                await withCheckedContinuation { continuation in
-                    Task {
-                        await Self.statusWaitingManager.setWakeUpContinuation(
-                            for: vehicleId,
-                            continuation: continuation,
-                        )
-                    }
-                }
-                return true // Wake-up was triggered
-            }
-
-            // Wait for the first task to complete
-            let wasWakeUp = try await group.next() ?? false
-
-            // Cancel remaining tasks and ensure continuation cleanup
-            group.cancelAll()
-            await Self.statusWaitingManager.clearWakeUp(for: vehicleId)
-
-            if wasWakeUp {
-                print(
-                    "⏰ [BBVehicle] Sleep interrupted by wake-up for vehicle \(self.displayName)",
-                )
-            }
-        }
+        try await Self.statusWaitingManager.wait(vehicleId: id, seconds: seconds)
     }
 
     @MainActor
@@ -890,12 +926,33 @@ final class ChargeSession {
     var electricityRatePerKWh: Double?
     /// Receipt total entered by the user. Takes precedence over estimates.
     var actualCost: Double?
+    /// A user-entered meter/receipt reading always takes precedence over estimates.
+    var manualEnergyKWh: Double?
+    private var tariffData: Data?
     /// New sessions choose their rate using location and charger type. False
     /// identifies older sessions created before location-aware pricing.
     var rateWasLocationAware: Bool = false
     private var speedSamplesData: Data?
 
     var isActive: Bool { endDate == nil }
+
+    var tariff: ChargingTariff? {
+        get { tariffData.flatMap { try? JSONDecoder().decode(ChargingTariff.self, from: $0) } }
+        set { tariffData = newValue.flatMap { try? JSONEncoder().encode($0) } }
+    }
+
+    func resolvedEnergyKWh(batteryCapacityKWh: Double?) -> Double {
+        if let manualEnergyKWh, manualEnergyKWh.isFinite, manualEnergyKWh >= 0 { return manualEnergyKWh }
+        if let capacity = batteryCapacityKWh, capacity > 0, percentAdded > 0 {
+            return capacity * percentAdded / 100
+        }
+        return energyAddedKWh
+    }
+
+    func energySource(batteryCapacityKWh: Double?) -> String {
+        if manualEnergyKWh != nil { return "Measured · manual" }
+        return batteryCapacityKWh != nil && percentAdded > 0 ? "Estimated from battery" : "Estimated from samples"
+    }
 
     var locationType: ChargingLocationType {
         get { ChargingLocationType(rawValue: locationTypeRaw) ?? .automatic }
@@ -956,7 +1013,9 @@ final class ChargeSession {
         isDCFast: Bool,
         locationType: ChargingLocationType,
         electricityRatePerKWh: Double?,
-        actualCost: Double?
+        actualCost: Double?,
+        manualEnergyKWh: Double? = nil,
+        tariff: ChargingTariff? = nil
     ) {
         self.startDate = startDate
         self.endDate = endDate
@@ -969,7 +1028,12 @@ final class ChargeSession {
         self.locationType = locationType
         self.electricityRatePerKWh = electricityRatePerKWh.flatMap { $0 > 0 ? $0 : nil }
         self.actualCost = actualCost.flatMap { $0 >= 0 ? $0 : nil }
+        self.manualEnergyKWh = manualEnergyKWh.flatMap { $0.isFinite && $0 >= 0 ? $0 : nil }
+        self.tariff = tariff
         rateWasLocationAware = true
+
+        // Edited dates must not leave chart samples outside the corrected session.
+        speedSamples = speedSamples.filter { $0.date >= startDate && $0.date <= (endDate ?? .distantFuture) }
 
         if endDate != nil {
             pendingStopDate = nil
@@ -1256,7 +1320,10 @@ extension BBVehicle {
         guard let context = modelContext, !trips.isEmpty else { return }
 
         let vehicleVIN = vin
-        let descriptor = FetchDescriptor<TripRecord>(predicate: #Predicate { $0.vin == vehicleVIN })
+        let incomingKeys = trips.map { TripRecord.key(vin: vehicleVIN, trip: $0) }
+        let descriptor = FetchDescriptor<TripRecord>(predicate: #Predicate {
+            $0.vin == vehicleVIN && incomingKeys.contains($0.tripKey)
+        })
         let existing = (try? context.fetch(descriptor)) ?? []
         var existingKeys = Set(existing.map(\.tripKey))
 
@@ -1288,10 +1355,6 @@ extension BBVehicle {
     /// this long while "charging"), close it at its last sample rather than
     /// stretching it across the gap.
     private static let staleSessionGap: TimeInterval = 3 * 3600
-    /// Repeated cached stop responses can share one vehicle timestamp. Once
-    /// the same stop has remained visible for this long, it is confirmed.
-    private static let stopConfirmationDelay: TimeInterval = 30
-
     /// Folds a fresh status into the charge-session log: opens a session on
     /// the first charging sample, integrates energy on subsequent ones, and
     /// closes the open session when charging stops. Called from
@@ -1355,11 +1418,9 @@ extension BBVehicle {
             guard sampleDate > session.lastSampleDate else { return }
 
             if let pendingStopDate = session.pendingStopDate {
-                let observedAt = session.pendingStopObservedAt ?? pendingStopDate
-                let hasNewerVehicleSample = sampleDate > pendingStopDate
-                let repeatedStopWasStable = sampleDate == pendingStopDate
-                    && status.lastUpdated.timeIntervalSince(observedAt) >= Self.stopConfirmationDelay
-                guard hasNewerVehicleSample || repeatedStopWasStable else { return }
+                // Replaying the same server snapshot is not independent
+                // evidence of a stop, no matter how often it was fetched.
+                guard sampleDate > pendingStopDate else { return }
 
                 session.endPercentage = max(
                     session.endPercentage,
@@ -1408,6 +1469,7 @@ extension BBVehicle {
             isDCFast: session.isDCFast
         )
         session.rateWasLocationAware = true
+        session.tariff = chargingTariff(locationType: session.locationType, isDCFast: session.isDCFast)
         session.maxChargeSpeedKW = evStatus.chargeSpeed
         session.appendSpeedSample(
             date: date,
@@ -1445,6 +1507,9 @@ extension BBVehicle {
     }
 
     func effectiveElectricityRate(at date: Date) -> Double? {
+        if smartChargingEnabled, let tariff = chargingTariff(locationType: .home, isDCFast: false) {
+            return tariff.rate(at: date)
+        }
         let baseRate = electricityRatePerKWh
         guard let offPeakElectricityRatePerKWh else { return baseRate }
 
@@ -1496,15 +1561,16 @@ extension BBVehicle {
     }
 
     func energyDelivered(for session: ChargeSession) -> Double {
-        guard let batteryCapacityKWh, batteryCapacityKWh > 0, session.percentAdded > 0 else {
-            return session.energyAddedKWh
-        }
-        return batteryCapacityKWh * session.percentAdded / 100
+        session.resolvedEnergyKWh(batteryCapacityKWh: batteryCapacityKWh)
     }
 
     func chargingCost(for session: ChargeSession) -> Double? {
         if let actualCost = session.actualCost, actualCost >= 0 {
             return actualCost
+        }
+        if let tariff = session.tariff {
+            return tariff.cost(energyKWh: energyDelivered(for: session), from: session.startDate,
+                               to: session.endDate ?? session.lastSampleDate)
         }
         guard let rate = chargingRate(for: session), rate > 0 else { return nil }
         return energyDelivered(for: session) * rate
@@ -1593,6 +1659,7 @@ extension BBVehicle {
                   previous.charging,
                   !snapshot.charging,
                   snapshot.pluggedIn,
+                  chargingDisplayState(at: status.syncDate ?? status.lastUpdated) != .scheduledPause,
                   target.map({ percentage < $0 - 1 }) == true {
             alerts.append(("Charging interrupted", "\(displayName) stopped charging at \(percentage)%."))
         }
