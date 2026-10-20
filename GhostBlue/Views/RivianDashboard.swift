@@ -174,7 +174,10 @@ struct RivianDashboard: View {
         ZStack {
             RoundedRectangle(cornerRadius: RV.Radius.hero, style: .continuous)
                 .fill(RV.surface)
-            HomeVehicleImageView(modelName: bbVehicle.model)
+            HomeVehicleImageView(
+                modelName: bbVehicle.model,
+                colorName: bbVehicle.vehicleImageColor.rawValue
+            )
                 .frame(maxWidth: .infinity)
                 .padding(24)
         }
