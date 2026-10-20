@@ -1,123 +1,234 @@
 # GhostBlue
 
+A native iPhone and Apple Watch app for Hyundai and Kia vehicles, built on
+BlueLink and Kia Connect. It adds an EV energy dashboard, off-peak smart
+charging, a durable trip archive and a Rivian-inspired theme to remote
+control of the car. Built with SwiftUI and SwiftData on top of
+[BetterBlueKit](https://github.com/schmidtwmark/BetterBlueKit).
+
 <p align="center">
-  <img src="ghostblue-phones.png" alt="GhostBlue on iPhone" width="400"/>
-  <img src="ghostblue-watch.png" alt="GhostBlue on Apple Watch" width="200"/>
+  <img src="docs/screenshots/home.png" alt="Home in the Rivian theme" width="200"/>
+  <img src="docs/screenshots/energy.png" alt="Energy tab" width="200"/>
+  <img src="docs/screenshots/energy-trend.png" alt="Energy trend, insights and a charging session" width="200"/>
+  <img src="docs/screenshots/trips.png" alt="Trips and efficiency" width="200"/>
 </p>
+<p align="center"><sub>Home · Energy · Energy trend · Trips (demo vehicle, Rivian theme)</sub></p>
 
-<p align="left">
-<a href="https://testflight.apple.com/join/n7NRXTWb">
-<img src="https://img.shields.io/badge/Install-Testflight-blue?style=for-the-badge" alt="Download on TestFlight" width="200"/>
-</a>
-</p>
+## Highlights
 
-<p align="left">
-<a href="https://markschmidt.io/ghostblue">
-<img src="https://img.shields.io/badge/Learn%20More-Visit%20Website-blue?style=for-the-badge" alt="Visit Website" width="200"/>
-</a>
-</p>
-
-A modern iOS app for controlling your Hyundai or Kia vehicle using BlueLink and Kia Connect services. Built with SwiftUI and powered by [BetterBlueKit](https://github.com/schmidtwmark/BetterBlueKit/tree/main).
+- **Energy tab.** Every charging session is detected and logged
+  automatically: start and end, charge added, energy, peak power, AC or DC,
+  home or public, and cost. A daily or weekly energy trend sits alongside.
+- **Off-peak smart charging.** GhostBlue starts and pauses home charging to
+  stay inside SDG&E's super off-peak windows, driven by Shortcuts and
+  verified against the car's reported status.
+- **Automations and smart alerts.** You get notified when charging finishes or
+  stops early, when the car is unplugged or unlocked, and when the battery,
+  12V or tyres need attention. A daily reminder to precondition is available too.
+- **Trip archive.** Trips are kept on the device beyond the API's rolling
+  window, with efficiency, best and worst trips, energy breakdowns and
+  cost estimates.
+- **Rivian theme.** An optional light dashboard with large command buttons,
+  colour-coded tiles and themed widgets and Live Activities, alongside four
+  classic themes.
+- **Gentle on the car.** GhostBlue forces a real-time read only when you ask
+  for one or a command needs verifying. Real-time reads wake the car's modem,
+  which costs 12V charge and counts against BlueLink's rate limits.
 
 ## Features
 
-### 🚗 Vehicle Control
-- **Lock/Unlock** your vehicle remotely
-- **Climate Control** with custom temperature, defrost, and seat heating
-- **Charging Control** for electric and plug-in hybrid vehicles
-- **Real-time Status** monitoring
+### Vehicle control
+- Lock and unlock.
+- Climate start and stop, with saved presets: temperature, defrost, heated
+  seats and steering wheel, and duration where the region supports it.
+- Start and stop charging, and set the AC and DC charge limits.
+- Status at a glance: battery or fuel level, range, plug state, doors, hood
+  and trunk, tyre pressure, 12V battery and location.
+- Several vehicles and accounts, with multi-factor sign-in where the brand
+  requires it.
+- Supported services: Hyundai USA, Kia USA, and Hyundai Canada and Europe
+  (beta). A **demo mode** with simulated vehicles needs no car.
 
-### 🔋 Multi-Powertrain Support
-- **Electric Vehicles** (BEV) - battery level, range, charging status
-- **Gas Vehicles** - fuel level and range
-- **Plug-in Hybrids** (PHEV) - both electric and gas systems
+### Energy (Charging tab)
+- **Automatic sessions.** Status refreshes in the app, widgets, watch and
+  Shortcuts all feed the same log. A session ends at once when the car is
+  unplugged, reaches its target, or GhostBlue sent the stop. A "not charging"
+  reading that nothing contradicts for 15 minutes also ends it, so brief
+  BlueLink glitches don't split a charge.
+- **Energy.** Charge added × usable battery capacity. The capacity is either
+  yours or a labelled model default (77.4 kWh for an IONIQ 5). Samples of
+  charger power are a fallback, capped by the charge actually added.
+- **Trends.** Week, month and three-month views with daily or weekly bars,
+  plus energy totals, session count, DC fast sessions, average session and
+  average peak power. You can filter by peak charging speed.
+- **Costs.**
+  - Separate rates for home off-peak, public DC and other charging.
+  - Each session keeps a snapshot of the time-of-use tariff it was charged
+    under, so later rate changes don't rewrite its cost.
+  - A receipt total can override the estimate.
+  - A monthly budget is tracked in Vehicle Center.
+- **Editing.** You can add a session by hand, edit or correct any session, and
+  export the selected period as CSV.
 
-### 📱 iOS Features
-- **Home Screen Widgets** - quick vehicle status on your home screen
-- **Lock Screen Widgets** - see battery and range at a glance
-- **Control Center Widgets** - lock, unlock, and control climate from Control Center (iOS 18+)
-- **Live Activities** (Beta) - real-time charging progress on your Lock Screen and Dynamic Island
-- **Apple Watch App** - control your vehicle from your wrist
-- **Watch Complications** - battery percentage on your watch face
-- **Siri Shortcuts** - automate vehicle actions with voice commands
-- **Dark Mode** - full support for light and dark themes
-- **Multiple Accounts** - manage vehicles from different accounts
-- **MFA Support** - seamless multi-factor authentication for Kia accounts
+### Off-peak smart charging (SDG&E)
+- Charge windows: weekdays 12–6 AM and 10 AM–2 PM; weekends and SDG&E holidays
+  12 AM–2 PM. This matches SDG&E's EV-TOU super off-peak hours as of 2026, but
+  check them against your own plan.
+- The **Reconcile Smart Charging** action starts or pauses charging so the
+  car matches the current window.
+  - It confirms each change against the car's reported status.
+  - It stops at your target charge level.
+  - It only acts at home (an on-device geofence) and never touches a DC fast
+    session.
+- **Charge now** and **Skip this window** override the schedule until the next
+  boundary.
+- Run it from a Shortcuts automation at each window boundary. GhostBlue also
+  catches up when opened, and warns if a scheduled check was missed.
 
-### 🛠 Developer Features
-- **HTTP Logging** - detailed request/response debugging
-- **SwiftData** - modern data persistence
-- **SwiftUI** - native iOS user interface
-- **Async/Await** - modern Swift concurrency
-- **Fake Vehicle Mode** - test the app without a real vehicle
+### Automations and alerts
+- **Smart alerts, set per vehicle:** charging complete, charging interrupted,
+  unlocked, a door or panel left open, low EV battery, low 12V battery and a
+  tyre pressure warning. Quiet hours are respected.
+- **Personal automations:**
+  - Notify when the battery drops below a percentage.
+  - Notify when the car is unplugged.
+  - A daily reminder to precondition.
+- **Maintenance reminders** by date or odometer.
+- A **remote activity log** of every command from the iPhone, widgets,
+  Shortcuts and Watch.
 
-## Project Structure
+### Trips
+- Trips are archived locally, so history outlives the API's short window.
+- Efficiency in mi/kWh or km/kWh, best and worst trips, efficiency trend,
+  energy-usage breakdown and estimated cost.
+- Search, favourites, custom names and CSV export.
+- Trip details are available for Hyundai USA and in demo mode.
+
+### Map and route planning
+- The vehicle's location on a map, with a privacy option to hide it.
+- Trip planning and live telemetry through
+  [A Better Routeplanner](https://abetterrouteplanner.com) (needs an ABRP
+  token).
+
+### Widgets, Watch and Shortcuts
+- **Home Screen widgets:** GhostBlue, Charge Dial, Command Center, Hero Card and
+  Woven Wordmark, with Rivian-styled versions under the Rivian theme.
+- **Lock Screen:** Range Ring, a ring, line or inline readout of charge and range.
+- **Control Center:** lock, unlock, start or stop climate, start or stop charging.
+- **Live Activities:** charging and climate progress on the Lock Screen and in
+  the Dynamic Island.
+- **Apple Watch:** an app with lock, climate and charging controls, plus
+  complications.
+- **Shortcuts and Siri:** Lock, Unlock, Start/Stop Climate, Start/Stop
+  Charging, Set Charge Limits, Refresh/Get Vehicle Status and Reconcile
+  Smart Charging.
+
+### Personalisation
+- Themes: Midnight, Hyundai Blue, Aurora, Minimal and Rivian, with a choice of
+  accent colour.
+- Car colour, custom vehicle names, distance and temperature units.
+- An editable Home dashboard: reorder, resize or hide the Smart Briefing,
+  Charging, Vehicle Health, Vehicle Status and Location sections.
+
+### Data and privacy
+- Data lives in an on-device SwiftData store, shared with the widgets and
+  Watch through an App Group. iCloud sync is off by default.
+- Optional **Face ID** lock.
+- The home geofence and location stay on the device. CSV exports leave out
+  the VIN.
+- **Backup & Restore** writes everything except HTTP logs to a JSON file.
+  Restoring merges the file into your data without overwriting anything.
+- **Privacy & Security** can delete trips, sessions, activity, reminders and
+  automations.
+
+## Getting started
+
+**Requirements:** Xcode 26 or later, an iOS 26 device or simulator,
+watchOS 26 for the Watch app, and an active BlueLink or Kia Connect
+subscription for a real car.
+
+```bash
+git clone --recurse-submodules git@github.com:Sai-Venkat-Krishna/GhostBlue.git
+cd GhostBlue
+open GhostBlue.xcodeproj
+```
+
+If you cloned without submodules, run
+`git submodule update --init --recursive`.
+
+1. In each target's Signing & Capabilities, select your team. Change the
+   bundle identifiers and the App Group
+   (`group.com.saivenkatkrishna.ghostblue.shared`) if you are signing with a
+   different account.
+2. Build and run the **GhostBlue** scheme.
+3. To try the app without a car, sign in with `testaccount@betterblue.com`
+   and password `betterblue`. That account creates simulated vehicles whose
+   charge, climate and locks respond to commands.
+
+Command-line build and tests:
+
+```bash
+xcodebuild -scheme GhostBlue -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
+xcodebuild test -scheme GhostBlue -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+```
+
+The unit tests cover:
+- charging-session accuracy;
+- the off-peak automation, run end to end against the demo vehicle;
+- tariffs and costs;
+- automation reminders;
+- backup and restore;
+- the store reconciler;
+- car wake-up behaviour.
+
+## Live Activities
+
+Live Activities are off by default; turn them on in Settings → Widget
+Settings. While the app is in the background they are refreshed by silent
+pushes from the service in [LiveActivityBackend/](LiveActivityBackend/). That
+service receives only a device push token, which it deletes after 8 hours,
+and never sees vehicle data or credentials. The app is currently configured
+with the original author's endpoint
+([LiveActivityManager.swift](GhostBlue/Utility/LiveActivityManager.swift)).
+To get background updates for your own build, deploy the backend with your
+own APNs key and point the app at it.
+
+## Project structure
 
 ```
 GhostBlue/
-├── GhostBlue/                 # Main iOS app
-│   ├── Views/                  # SwiftUI views
-│   ├── Models/                 # SwiftData models
-│   ├── Utility/                # Helper classes
-│   └── GhostBlueApp.swift     # App entry point
-├── GhostBlueWatch Watch App/  # Apple Watch app
-├── Widget/                     # iOS widgets, Control Center, Live Activities
+├── GhostBlue/                  # iOS app
+│   ├── Models/                 # SwiftData models (accounts, vehicles, sessions, trips…)
+│   ├── Views/                  # SwiftUI screens, components and the Rivian design system
+│   └── Utility/                # API client wrappers, smart charging, backup, settings
+├── GhostBlueWatch Watch App/   # Apple Watch app
+├── Widget/                     # Widgets, Control Center, Live Activities, App Intents
 ├── WatchWidget/                # Watch complications
-├── LiveActivityBackend/        # Backend for Live Activity push notifications
-├── BetterBlueKit/              # Swift package for API communication
-└── README.md                   # This file
+├── GhostBlueTests/             # Unit tests
+├── LiveActivityBackend/        # Push service for Live Activity refreshes
+├── BetterBlueKit/              # Submodule: Hyundai/Kia API clients
+└── docs/screenshots/           # README screenshots
 ```
 
-## Architecture
+See [CLAUDE.md](CLAUDE.md) for an architecture walkthrough and
+[Troubleshooting.md](Troubleshooting.md) for sign-in, Watch syncing, widget
+and supported-region issues. For HTTP request logs, enable debug mode, then open Settings → HTTP Logs.
 
-- **BetterBlueKit**: Swift package handling all API communication
-- **SwiftData**: Modern Core Data replacement for persistence
-- **SwiftUI**: Declarative UI framework
-- **Combine/Async**: Reactive programming and concurrency
-- **CloudKit**: iCloud sync for settings and accounts
+## Important notes
 
-## Development
+- **Unofficial.** This app is not affiliated with Hyundai or Kia. Use it in line
+  with your connected-services terms.
+- **Subscription required.** Remote features need an active BlueLink or Kia
+  Connect subscription.
+- **12V battery.** Real-time reads and remote commands wake the car. GhostBlue
+  limits them, but frequent manual refreshes still drain the 12V battery and
+  can hit rate limits.
+- **Estimates.** Charging energy and cost are estimates unless you enter a
+  meter reading or receipt.
 
-### Linting
-The project uses SwiftLint for code style enforcement:
-```bash
-swiftlint lint
-```
+## Credits and license
 
-### Debugging
-- HTTP requests are logged in the app under Settings > HTTP Logs
-- Vehicle status can be monitored in real-time
-- Fake vehicles support custom scenarios for testing
-
-## Live Activities (Beta)
-
-Live Activities display real-time charging progress on your Lock Screen and Dynamic Island. This feature is **off by default** and can be enabled in Settings > Widget Settings.
-
-### How it works
-To keep the Live Activity updated, GhostBlue uses a lightweight [backend service](LiveActivityBackend/) that sends silent push notifications to refresh the charging status periodically.
-
-### Privacy
-- No vehicle information is sent to the backend
-- No account credentials leave your device
-- Only your device's push token is stored temporarily
-- Tokens are automatically deleted after 8 hours
-
-The backend is fully open source - see [LiveActivityBackend/](LiveActivityBackend/) for the source code.
-
-## Privacy & Security
-
-- **Credentials**: Stored securely in iCloud with SwiftData
-- **Network**: All API calls use HTTPS encryption
-- **Live Activities**: Only push tokens are sent to the backend (no vehicle data)
-
-## Important Notes
-
-- **Subscription Required**: You need an active BlueLink/Kia Connect subscription
-- **Battery Impact**: Frequent remote commands may drain your vehicle's 12V battery
-- **Rate Limits**: Respect API rate limits to avoid account suspension
-- **Unofficial**: This app is not affiliated with Hyundai or Kia
-- **Terms of Service**: Ensure you comply with your vehicle service terms
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+GhostBlue was created by [Mark Schmidt](https://markschmidt.io/ghostblue), and
+this version builds on his app and on
+[BetterBlueKit](https://github.com/schmidtwmark/BetterBlueKit). It is
+released under the MIT License; see [LICENSE](LICENSE).
