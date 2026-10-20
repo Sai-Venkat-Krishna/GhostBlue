@@ -22,8 +22,8 @@ final class WakeUpReductionTests: XCTestCase {
 
     // MARK: - Re-login only for session errors
 
-    private func error(_ type: APIError.ErrorType, code: Int? = nil) -> APIError {
-        APIError(message: "test", code: code, apiName: "Test", errorType: type)
+    private func error(_ type: APIError.ErrorType, code: Int? = nil, message: String = "test") -> APIError {
+        APIError(message: message, code: code, apiName: "Test", errorType: type)
     }
 
     func testOnlySessionErrorsTriggerAReLogin() {
@@ -39,6 +39,7 @@ final class WakeUpReductionTests: XCTestCase {
             error(.serverError, code: 502),       // modem did not answer a real-time read
             error(.general, code: 429),           // rate limited
             error(.general, code: 503),
+            error(.general, message: "Network error: The Internet connection appears to be offline."),
             error(.general, code: -1009),         // URLError: offline
             error(.general, code: -1001),         // URLError: timed out
             error(.concurrentRequest, code: 502),

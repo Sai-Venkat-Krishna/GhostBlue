@@ -277,7 +277,11 @@ extension BBAccount {
              .regionNotSupported, .failedRetryLogin, .kiaInvalidRequest:
             return false
         case .general:
-            guard let code = error.code else { return true }
+            guard let code = error.code else {
+                // BetterBlueKit reports a request that never reached the
+                // server (offline, timed out) with this prefix and no code.
+                return !error.message.hasPrefix("Network error:")
+            }
             // Negative codes are URLError transport failures (offline,
             // timeout); 429 and 5xx are the server's problem, not the token's.
             return code > 0 && code != 429 && code < 500
