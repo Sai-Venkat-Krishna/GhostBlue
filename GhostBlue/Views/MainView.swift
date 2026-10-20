@@ -48,6 +48,17 @@ struct MainView: View {
     @State var lastError: APIError?
     @State private var showingSettings = false
     @State private var isAppLocked = false
+    @State private var backupImports = BackupImportCoordinator.shared
+
+    /// A backup opened from outside the app, held back while Face ID lock is up.
+    private var pendingBackupImport: Binding<PendingBackupFile?> {
+        Binding(
+            get: {
+                appSettings.requireBiometricUnlock && isAppLocked ? nil : backupImports.pendingFile
+            },
+            set: { backupImports.pendingFile = $0 }
+        )
+    }
     @State private var isAuthenticating = false
     @State private var authenticationMessage: String?
 
@@ -159,6 +170,10 @@ struct MainView: View {
                 .transition(.opacity)
                 .zIndex(100)
             }
+        }
+        .sheet(item: pendingBackupImport) { file in
+            BackupImportSheet(file: file)
+                .tint(appSettings.accentColor)
         }
     }
 

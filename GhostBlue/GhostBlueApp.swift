@@ -63,9 +63,13 @@ struct GhostBlueApp: App {
         WindowGroup {
             MainView()
                 .onOpenURL { url in
+                    // A backup AirDropped or opened from Files; MainView shows
+                    // the import preview once the app is unlocked.
+                    if BackupImportCoordinator.shared.handle(url) { return }
                     handleDeepLink(url)
                 }
                 .task {
+                    BackupTransfer.purgeStaleInboxCopies()
                     await AutomationReminderScheduler.sync(in: sharedModelContainer.mainContext)
                     await reconcileEnabledSmartChargingVehicles()
                     await VehicleRefreshPolicy.run(interval: { 60 }) {

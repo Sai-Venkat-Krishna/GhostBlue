@@ -503,7 +503,10 @@ struct BackupMergeSummary {
 }
 
 extension BackupArchive {
-    private static func stamp(_ date: Date) -> Int { Int(date.timeIntervalSince1970.rounded()) }
+    /// Whole seconds, truncated the way the backup's ISO 8601 dates are.
+    /// Rounding instead made 12:00:00.6 in the store (→ :01) miss the same
+    /// event in a file (:00), so re-importing duplicated it.
+    private static func stamp(_ date: Date) -> Int { Int(date.timeIntervalSince1970.rounded(.down)) }
 
     /// Folds this archive into `context`. Add-only: a row whose natural key
     /// already exists is left exactly as it is, so importing the same file
@@ -627,13 +630,16 @@ extension BackupArchive {
         }
 
         // Charge sessions — keyed by VIN + start instant.
+        // The same record id means the same session, whatever its dates.
         var sessionKeys = Set<String>()
+        var sessionIDs = Set<UUID>()
         for session in all(ChargeSession.self) {
             sessionKeys.insert("\(session.vin)|\(stamp(session.startDate))")
+            sessionIDs.insert(session.id)
         }
         for row in archive.chargeSessions {
             let key = "\(row.vin)|\(stamp(row.startDate))"
-            guard !sessionKeys.contains(key) else {
+            guard !sessionKeys.contains(key), !sessionIDs.contains(row.id) else {
                 summary.chargeSessionsSkipped += 1
                 continue
             }
@@ -708,12 +714,14 @@ extension BackupArchive {
 
         // Remote command history.
         var commandKeys = Set<String>()
+        var commandIDs = Set<UUID>()
         for activity in all(RemoteCommandActivity.self) {
             commandKeys.insert("\(activity.vin)|\(activity.commandName)|\(stamp(activity.startedAt))")
+            commandIDs.insert(activity.id)
         }
         for row in archive.remoteCommands {
             let key = "\(row.vin)|\(row.commandName)|\(stamp(row.startedAt))"
-            guard !commandKeys.contains(key) else {
+            guard !commandKeys.contains(key), !commandIDs.contains(row.id) else {
                 summary.remoteCommandsSkipped += 1
                 continue
             }
@@ -735,12 +743,14 @@ extension BackupArchive {
 
         // Maintenance reminders.
         var reminderKeys = Set<String>()
+        var reminderIDs = Set<UUID>()
         for reminder in all(MaintenanceReminder.self) {
             reminderKeys.insert("\(reminder.vin)|\(reminder.title.lowercased())|\(stamp(reminder.createdAt))")
+            reminderIDs.insert(reminder.id)
         }
         for row in archive.maintenanceReminders {
             let key = "\(row.vin)|\(row.title.lowercased())|\(stamp(row.createdAt))"
-            guard !reminderKeys.contains(key) else {
+            guard !reminderKeys.contains(key), !reminderIDs.contains(row.id) else {
                 summary.remindersSkipped += 1
                 continue
             }
