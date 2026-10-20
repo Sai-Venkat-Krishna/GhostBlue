@@ -220,13 +220,17 @@ struct WatchVehicleCarouselView: View {
         } action: { offset, _ in
             scrollOffset = offset
         }
-        .background(
-            LinearGradient(
-                gradient: Gradient(colors: themedGradient),
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing,
-            ),
-        )
+        .background {
+            if appSettings.appTheme == .rivian {
+                RVTokens.background.ignoresSafeArea()
+            } else {
+                LinearGradient(
+                    gradient: Gradient(colors: themedGradient),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing,
+                )
+            }
+        }
         .tint(appSettings.accentColor)
     }
 }

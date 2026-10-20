@@ -65,7 +65,7 @@ struct BackupRestoreView: View {
             if isWorking {
                 Section {
                     HStack(spacing: 10) {
-                        ProgressView()
+                        BrandProgressView()
                         Text("Working…")
                             .foregroundStyle(.secondary)
                     }
@@ -167,6 +167,8 @@ struct BackupRestoreView: View {
                 return
             }
             summary = try BackupArchive.merge(archive, into: modelContext)
+            // Restored precondition reminders need their notifications.
+            Task { await AutomationReminderScheduler.sync(in: modelContext) }
         } catch {
             errorMessage = error.localizedDescription
             BBLogger.error(.app, "BackupRestoreView: import failed: \(error)")

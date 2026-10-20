@@ -82,12 +82,79 @@ public class SwiftDataFakeVehicleProvider: FakeVehicleProvider {
             throw APIError.logError("Fake vehicle not found: \(vin)", apiName: "FakeAPI")
         }
 
+        let now = Date()
+        advanceSimulatedCharge(for: bbVehicle, to: now)
+
         // Update lastUpdated to simulate a fresh fetch from the server
-        bbVehicle.lastUpdated = Date()
-        bbVehicle.syncDate = Date()
+        bbVehicle.lastUpdated = now
+        bbVehicle.syncDate = now
         try? modelContext.save()
 
         return createVehicleStatus(from: bbVehicle)
+    }
+
+    /// The fake "server" shares `bbVehicle.evStatus` with the app, which
+    /// shows `charging = true` at 0 kW while it confirms a stop. The server
+    /// itself already reported the stop, so report that rather than echoing
+    /// the placeholder back as a resumed charge.
+    private func serverEVStatus(for bbVehicle: BBVehicle) -> VehicleStatus.EVStatus? {
+        guard var evStatus = bbVehicle.evStatus else { return nil }
+        if bbVehicle.pendingChargingStopDate != nil, evStatus.charging, evStatus.chargeSpeed == 0 {
+            evStatus.charging = false
+        }
+        return evStatus
+    }
+
+    /// Simulates a charging car between fetches: state of charge and range
+    /// rise with the charger's power until the plug type's target, where
+    /// charging stops and the car stays plugged in. Lets the Energy tab's
+    /// session log be exercised without a real vehicle.
+    private func advanceSimulatedCharge(for bbVehicle: BBVehicle, to now: Date) {
+        guard var evStatus = serverEVStatus(for: bbVehicle) else { return }
+        defer { bbVehicle.evStatus = evStatus }
+        guard evStatus.charging, evStatus.pluggedIn,
+              let last = bbVehicle.syncDate ?? bbVehicle.lastUpdated
+        else { return }
+
+        let elapsed = min(max(0, now.timeIntervalSince(last)), 6 * 3600)
+        let capacity = bbVehicle.effectiveBatteryCapacityKWh ?? 77.4
+        let speed = evStatus.chargeSpeed > 0 ? evStatus.chargeSpeed : Self.simulatedSpeedKW(for: evStatus.plugType)
+        let target = evStatus.currentTargetSOC ?? 100
+        let current = evStatus.evRange.percentage
+        let gained = speed * elapsed / 3600 / capacity * 100
+        // Never lower the charge of a car already at or above its target.
+        let next = current >= target ? current : min(target, current + gained)
+
+        let rangePerPercent = current > 0 ? evStatus.evRange.range.length / current : 3
+        evStatus.evRange.percentage = next
+        evStatus.evRange.range.length = (rangePerPercent * next).rounded()
+
+        if next >= target {
+            evStatus = VehicleStatus.EVStatus(
+                charging: false,
+                chargeSpeed: 0,
+                evRange: evStatus.evRange,
+                plugType: evStatus.plugType,
+                chargeTime: .seconds(0),
+                targetSocAC: evStatus.targetSocAC,
+                targetSocDC: evStatus.targetSocDC
+            )
+        } else {
+            let remainingMinutes = Int64(((target - next) / 100 * capacity / speed * 60).rounded(.up))
+            evStatus = VehicleStatus.EVStatus(
+                charging: true,
+                chargeSpeed: speed,
+                evRange: evStatus.evRange,
+                plugType: evStatus.plugType,
+                chargeTime: .seconds(remainingMinutes * 60),
+                targetSocAC: evStatus.targetSocAC,
+                targetSocDC: evStatus.targetSocDC
+            )
+        }
+    }
+
+    private static func simulatedSpeedKW(for plugType: VehicleStatus.PlugType) -> Double {
+        plugType == .dcCharger ? 120 : 10.9
     }
 
     public func executeCommand(_ command: VehicleCommand, for vin: String, accountId: UUID) async throws {
@@ -124,20 +191,24 @@ public class SwiftDataFakeVehicleProvider: FakeVehicleProvider {
         case .startCharge:
             BBLogger.info(.fakeAPI, "FakeAPI: Starting charge for fake vehicle '\(bbVehicle.vin)'")
             if let evStatus = bbVehicle.evStatus {
-                let batteryPercentage = evStatus.evRange.percentage
-                // Calculate reasonable charge time: assume 50 kW charging speed, ~1% per minute
-                let remainingPercentage = 100.0 - batteryPercentage
-                let chargeTimeMinutes = Int64(remainingPercentage * 1.5) // ~1.5 minutes per %
+                let plugType = evStatus.plugType != .unplugged ? evStatus.plugType : .acCharger
+                let speed = Self.simulatedSpeedKW(for: plugType)
+                let capacity = bbVehicle.effectiveBatteryCapacityKWh ?? 77.4
+                let target = (plugType == .dcCharger ? evStatus.targetSocDC : evStatus.targetSocAC) ?? 100
+                let remainingPercentage = max(0, target - evStatus.evRange.percentage)
+                let chargeTimeMinutes = Int64((remainingPercentage / 100 * capacity / speed * 60).rounded(.up))
 
                 bbVehicle.evStatus = VehicleStatus.EVStatus(
                     charging: true,
-                    chargeSpeed: 50.0,
+                    chargeSpeed: speed,
                     evRange: evStatus.evRange,
-                    plugType: evStatus.plugType != .unplugged ? evStatus.plugType : .acCharger,
+                    plugType: plugType,
                     chargeTime: .seconds(chargeTimeMinutes * 60),
                     targetSocAC: evStatus.targetSocAC,
                     targetSocDC: evStatus.targetSocDC
                 )
+                // Simulated charge progress is measured from this moment.
+                bbVehicle.syncDate = Date()
             }
         case .stopCharge:
             BBLogger.info(.fakeAPI, "FakeAPI: Stopping charge for fake vehicle '\(bbVehicle.vin)'")

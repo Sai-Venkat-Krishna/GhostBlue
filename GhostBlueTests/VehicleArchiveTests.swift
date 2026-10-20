@@ -333,10 +333,14 @@ final class VehicleArchiveTests: XCTestCase {
         XCTAssertEqual(session.endPercentage, 24)
     }
 
+    /// Non-charging samples stay plugged in by default: that is the
+    /// ambiguous BlueLink blip the stop debounce exists for. An unplugged
+    /// sample ends a session immediately (see EnergySessionAccuracyTests).
     private func makeVehicleStatus(
         charging: Bool,
         percentage: Double,
-        syncDate: Date
+        syncDate: Date,
+        pluggedIn: Bool = true
     ) -> VehicleStatus {
         VehicleStatus(
             vin: "TESTVIN",
@@ -347,7 +351,7 @@ final class VehicleArchiveTests: XCTestCase {
                     range: Distance(length: 150, units: .miles),
                     percentage: percentage
                 ),
-                plugType: charging ? .acCharger : .unplugged,
+                plugType: charging || pluggedIn ? .acCharger : .unplugged,
                 chargeTime: .seconds(3_600)
             ),
             location: VehicleStatus.Location(latitude: 37.3349, longitude: -122.0090),

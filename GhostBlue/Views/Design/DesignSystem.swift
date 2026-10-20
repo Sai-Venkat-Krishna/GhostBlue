@@ -57,11 +57,16 @@ private struct GBAccessibleGlassModifier: ViewModifier {
     let interactive: Bool
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.gbSolidCardColor) private var solid
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         Group {
-            if reduceTransparency {
+            if let solid {
+                content
+                    .containerShape(shape)
+                    .background(solid, in: shape)
+            } else if reduceTransparency {
                 content
                     .background(Color.black.opacity(0.86), in: shape)
             } else {
@@ -83,10 +88,13 @@ private struct GBAccessibleGlassModifier: ViewModifier {
 private struct GBAccessibleCircleModifier: ViewModifier {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.gbSolidCardColor) private var solid
 
     func body(content: Content) -> some View {
         Group {
-            if reduceTransparency {
+            if let solid {
+                content.background(solid, in: Circle())
+            } else if reduceTransparency {
                 content.background(Color.black.opacity(0.86), in: Circle())
             } else {
                 content
@@ -159,9 +167,18 @@ struct GBSkeletonCard: View {
 struct GBBackground: View {
     let colors: [Color]
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.gbRivianBackdrop) private var rivianBackdrop
     @State private var driftingGlow = false
 
     var body: some View {
+        if rivianBackdrop {
+            RV.background.ignoresSafeArea().allowsHitTesting(false)
+        } else {
+            classicBackdrop
+        }
+    }
+
+    private var classicBackdrop: some View {
         LinearGradient(colors: colors, startPoint: .top, endPoint: .bottom)
             .overlay(
                 RadialGradient(

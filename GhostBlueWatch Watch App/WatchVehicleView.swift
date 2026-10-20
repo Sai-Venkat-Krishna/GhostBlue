@@ -159,7 +159,7 @@ struct WatchVehicleView: View {
         )
     }
 
-    var body: some View {
+    private var classicScroll: some View {
         ScrollView {
             VStack(spacing: 8) {
                 //                // Vehicle name at the top
@@ -261,12 +261,22 @@ struct WatchVehicleView: View {
             }
             .padding()
         }
+    }
+
+    var body: some View {
+        Group {
+            if appSettings.appTheme == .rivian {
+                rivianScroll
+            } else {
+                classicScroll
+            }
+        }
         .onAppear {
-            // Auto-refresh if data is older than 5 minutes
-            if let lastUpdated = currentVehicle.lastUpdated,
-               lastUpdated < Date().addingTimeInterval(-300) {
+            // Auto-refresh if data is missing or older than 5 minutes, from
+            // the server's snapshot: opening the app must not wake the car.
+            if currentVehicle.lastUpdated.map({ $0 < Date().addingTimeInterval(-300) }) ?? true {
                 Task {
-                    await refreshStatus()
+                    await refreshStatus(forced: false)
                 }
             }
         }
@@ -277,6 +287,154 @@ struct WatchVehicleView: View {
             companionSyncRevision += 1
         }
         //        .navigationTitle(vehicle.displayName)
+    }
+
+    // MARK: Rivian theme
+
+    private var levelPercentage: Int? { batteryPercentage ?? fuelPercentage }
+
+    private var rangeOnly: String {
+        let unit = appSettings.preferredDistanceUnit
+        if currentVehicle.fuelType.hasElectricCapability, let evStatus = currentVehicle.evStatus,
+           evStatus.evRange.range.length > 0 {
+            return evStatus.evRange.range.units.format(evStatus.evRange.range.length, to: unit)
+        }
+        if let gasRange = currentVehicle.gasRange, gasRange.range.length > 0 {
+            return gasRange.range.units.format(gasRange.range.length, to: unit)
+        }
+        return "--"
+    }
+
+    private var rivianStatus: (text: String, tint: Color) {
+        if isCharging { return ("Charging", RVTokens.energy) }
+        if isPluggedIn { return ("Plugged in", RVTokens.energy) }
+        if isClimateRunning { return ("Climate on", RVTokens.climate) }
+        switch currentVehicle.lockStatus {
+        case .locked: return ("Locked", RVTokens.inkSecondary)
+        case .unlocked: return ("Unlocked", RVTokens.service)
+        default: return ("Parked", RVTokens.inkSecondary)
+        }
+    }
+
+    /// Rivian layout: charge figure first, slim battery bar, the car, then
+    /// the same context-sensitive commands as the classic layout.
+    private var rivianScroll: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 6) {
+                    Button {
+                        showingSettings = true
+                    } label: {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(currentVehicle.displayName)
+                                .font(.headline)
+                                .fontWeight(.bold)
+                                .foregroundStyle(RVTokens.ink)
+                                .lineLimit(1)
+                            Text(rivianStatus.text)
+                                .font(.caption2)
+                                .foregroundStyle(rivianStatus.tint)
+                                .lineLimit(1)
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    Spacer(minLength: 4)
+
+                    Button {
+                        Task {
+                            await refreshStatus()
+                        }
+                    } label: {
+                        Group {
+                            if isRefreshing {
+                                ProgressView()
+                                    .scaleEffect(0.6)
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 12, weight: .semibold))
+                            }
+                        }
+                        .foregroundStyle(RVTokens.commandInactiveIcon)
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(RVTokens.commandInactiveFill))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isRefreshing)
+                    .accessibilityLabel("Refresh")
+                }
+
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    HStack(alignment: .firstTextBaseline, spacing: 1) {
+                        Text(levelPercentage.map(String.init) ?? "--")
+                            .font(.system(size: 34, weight: .bold, design: .rounded))
+                        Text("%")
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            .foregroundStyle(RVTokens.inkSecondary)
+                    }
+                    .foregroundStyle(RVTokens.ink)
+                    Text(rangeOnly)
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(RVTokens.inkSecondary)
+                }
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+                GeometryReader { geo in
+                    let level = levelPercentage.map(Double.init)
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(RVTokens.surfaceMuted)
+                        Capsule()
+                            .fill(RVTokens.battery(level))
+                            .frame(width: max(5, geo.size.width * min(max((level ?? 0) / 100, 0), 1)))
+                    }
+                }
+                .frame(height: 5)
+
+                WatchVehicleImageView(
+                    modelName: syncedAppearance?.model ?? currentVehicle.model,
+                    colorName: syncedAppearance?.color ?? currentVehicle.vehicleImageColor.rawValue
+                )
+                .frame(height: 54)
+                .frame(maxWidth: .infinity)
+
+                VStack(spacing: 8) {
+                    WatchVehicleButton(
+                        currentAction: isLocked ? unlockAction : lockAction,
+                        allActions: [lockAction, unlockAction],
+                        menuLabel: "Door Actions",
+                        vehicle: vehicle,
+                        rivianStyle: true
+                    )
+
+                    WatchVehicleButton(
+                        currentAction: isClimateRunning ? stopClimateAction : startClimateAction,
+                        allActions: [startClimateAction, stopClimateAction],
+                        menuLabel: "Climate Actions",
+                        vehicle: vehicle,
+                        rivianStyle: true
+                    )
+
+                    if isPluggedIn {
+                        WatchVehicleButton(
+                            currentAction: isCharging ? stopChargeAction : startChargeAction,
+                            allActions: [startChargeAction, stopChargeAction],
+                            menuLabel: "Charge Actions",
+                            vehicle: vehicle,
+                            rivianStyle: true
+                        )
+                    }
+                }
+
+                if let lastUpdated = currentVehicle.lastUpdated {
+                    Text(formatUpdateTime(lastUpdated))
+                        .font(.caption2)
+                        .foregroundStyle(RVTokens.inkSecondary)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .padding(.horizontal, 6)
+        }
     }
 
     private func formatUpdateTime(_ date: Date) -> String {
@@ -297,7 +455,10 @@ struct WatchVehicleView: View {
     }
 
     @MainActor
-    private func refreshStatus() async {
+    /// - Parameter forced: a real-time read that wakes the car's modem.
+    ///   Only the refresh button forces one; opening the app reads the
+    ///   server's latest snapshot so glancing at the watch never wakes the car.
+    private func refreshStatus(forced: Bool = true) async {
         guard !isRefreshing else { return }
 
         isRefreshing = true
@@ -316,15 +477,14 @@ struct WatchVehicleView: View {
                 throw APIError(message: "Account not found for vehicle")
             }
 
-            // Watch refresh is always user-initiated (tap or view appear);
-            // force a real-time poll so it matches the MyHyundai/Kia Connect
-            // behaviour users expect.
-            let status = try await account.fetchVehicleStatus(
+            // fetchVehicleStatus already applies the status to the vehicle.
+            // Applying its returned (debounced) status a second time would
+            // read the "confirming stop" placeholder as a resumed charge.
+            _ = try await account.fetchVehicleStatus(
                 for: currentVehicle,
                 modelContext: modelContext,
-                cached: false
+                cached: !forced
             )
-            currentVehicle.updateStatus(with: status)
             lastRefreshDate = Date()
 
         } catch {
@@ -450,8 +610,20 @@ struct WatchVehicleButton: View {
     let allActions: [MainVehicleAction]
     let menuLabel: String
     let vehicle: BBVehicle
+    /// Rivian theme: solid surface and a coloured circular icon chip.
+    var rivianStyle = false
 
     @State private var inProgressAction: MainVehicleAction?
+
+    /// Rivian palette for an action's state colour.
+    private var rivianChipColor: Color {
+        switch currentAction.color {
+        case .red: RVTokens.danger
+        case .green: RVTokens.energy
+        case .blue: RVTokens.climate
+        default: RVTokens.vehicleCenter
+        }
+    }
     @State private var currentTask: Task<Void, Never>?
     @State private var showingMenu = false
 
@@ -465,10 +637,17 @@ struct WatchVehicleButton: View {
                     currentAction.icon
                         .spin(currentAction.shouldRotate)
                         .pulse(currentAction.shouldPulse)
-                        .foregroundColor(currentAction.color)
+                        .foregroundColor(rivianStyle ? .white : currentAction.color)
                 }
             }
             .frame(width: 24, height: 24)
+            .background {
+                if rivianStyle {
+                    Circle()
+                        .fill(rivianChipColor)
+                        .frame(width: 30, height: 30)
+                }
+            }
 
             Text(inProgressAction?.inProgressLabel ?? currentAction.stateLabel)
                 .fontWeight(.medium)
@@ -487,8 +666,8 @@ struct WatchVehicleButton: View {
             }
         }
         .padding()
-        .background(Color.gray.opacity(0.2))
-        .cornerRadius(12)
+        .background(rivianStyle ? RVTokens.surface : Color.gray.opacity(0.2))
+        .cornerRadius(rivianStyle ? 18 : 12)
         .simultaneousGesture(
             TapGesture()
                 .onEnded { _ in

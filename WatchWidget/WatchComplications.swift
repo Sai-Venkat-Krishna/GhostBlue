@@ -119,6 +119,15 @@ struct VehicleStatusComplicationView: View {
     @Environment(\.widgetFamily) var family
 
     var body: some View {
+        if AppTheme.persisted == .rivian {
+            RivianComplicationView(entry: entry, family: family)
+        } else {
+            classicBody
+        }
+    }
+
+    @ViewBuilder
+    private var classicBody: some View {
         switch family {
         case .accessoryCircular:
             ZStack {
@@ -167,6 +176,86 @@ struct VehicleStatusComplicationView: View {
                 Label(range, systemImage: "car.fill")
             } else {
                 Label("GhostBlue", systemImage: "car.fill")
+            }
+        default:
+            Image(systemName: "car.fill")
+        }
+    }
+}
+
+/// Rivian theme: green charge gauges and a gold accent on full-colour faces.
+private struct RivianComplicationView: View {
+    let entry: WatchComplicationEntry
+    let family: WidgetFamily
+
+    var body: some View {
+        switch family {
+        case .accessoryCircular:
+            if let percentage = entry.batteryPercentage {
+                Gauge(value: percentage, in: 0...100) {
+                    Image(systemName: "bolt.fill")
+                } currentValueLabel: {
+                    Text("\(Int(percentage))")
+                        .font(.system(.body, design: .rounded))
+                }
+                .gaugeStyle(.accessoryCircular)
+                .tint(RVTokens.battery(percentage))
+            } else {
+                ZStack {
+                    AccessoryWidgetBackground()
+                    Image(systemName: "car.fill")
+                        .font(.title2)
+                }
+            }
+        case .accessoryCorner:
+            Image(systemName: "bolt.car.fill")
+                .font(.title2)
+                .foregroundStyle(RVTokens.accent)
+                .widgetLabel {
+                    if let percentage = entry.batteryPercentage {
+                        Gauge(value: percentage, in: 0...100) {
+                            Text(entry.rangeText ?? "")
+                        } currentValueLabel: {
+                            Text("\(Int(percentage))%")
+                        }
+                        .tint(RVTokens.battery(percentage))
+                    } else {
+                        Text(entry.rangeText ?? entry.vehicleName ?? "GhostBlue")
+                    }
+                }
+        case .accessoryRectangular:
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Text(entry.vehicleName ?? "GhostBlue")
+                        .font(.headline)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    Image(systemName: "bolt.fill")
+                        .foregroundStyle(RVTokens.accent)
+                        .widgetAccentable()
+                }
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    if let percentage = entry.batteryPercentage {
+                        Text("\(Int(percentage))%")
+                            .font(.system(.title3, design: .rounded).weight(.bold))
+                    }
+                    if let range = entry.rangeText {
+                        Text(range)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if let percentage = entry.batteryPercentage {
+                    Gauge(value: percentage, in: 0...100) { EmptyView() }
+                        .gaugeStyle(.accessoryLinearCapacity)
+                        .tint(RVTokens.battery(percentage))
+                }
+            }
+        case .accessoryInline:
+            if let percentage = entry.batteryPercentage, let range = entry.rangeText {
+                Label("\(Int(percentage))% · \(range)", systemImage: "bolt.car.fill")
+            } else {
+                Label(entry.rangeText ?? "GhostBlue", systemImage: "car.fill")
             }
         default:
             Image(systemName: "car.fill")

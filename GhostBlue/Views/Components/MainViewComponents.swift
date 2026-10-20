@@ -92,7 +92,7 @@ struct EmptyAccountsView: View {
                 .padding(.bottom, 40)
             }
         }
-        .environment(\.colorScheme, .dark)
+        .ghostBlueColorScheme()
         .sheet(isPresented: $showingAddAccount) {
             NavigationView {
                 AddAccountView()
@@ -134,7 +134,10 @@ struct EmptyAccountsView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 13)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .background(
+            AppSettings.shared.appTheme == .rivian ? AnyShapeStyle(RV.surface) : AnyShapeStyle(.thinMaterial),
+            in: RoundedRectangle(cornerRadius: 16)
+        )
     }
 }
 
@@ -148,7 +151,7 @@ struct EmptyVehiclesView: View {
             GBBackground(colors: AppSettings.shared.themeColors)
             VStack(spacing: 20) {
                 if isLoading {
-                    ProgressView()
+                    BrandProgressView()
                         .scaleEffect(1.5)
                         .tint(AppSettings.shared.accentColor)
                     Text("Loading your garage…")
@@ -186,6 +189,6 @@ struct EmptyVehiclesView: View {
             }
             .padding()
         }
-        .environment(\.colorScheme, .dark)
+        .ghostBlueColorScheme()
     }
 }

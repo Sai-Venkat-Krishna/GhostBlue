@@ -153,6 +153,7 @@
 				Utility/DiagnosticInfo.swift,
 				Utility/HTTPLogSinkManager.swift,
 				Utility/LiveActivityManager.swift,
+				Utility/RivianTokens.swift,
 				Utility/SwiftDataFakeVehicleProvider.swift,
 				Utility/TemperatureDisplay.swift,
 				Utility/VehicleUtility.swift,
@@ -165,13 +166,6 @@
 				GhostBlueIcon.icon,
 			);
 			target = ED37F0232DFB4E4F00C02398 /* GhostBlue */;
-		};
-		ED4E60142E6BDE2800F9ED90 /* Exceptions for "GhostBlueWatch Watch App" folder in "WidgetExtension" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				GhostBlueIcon.icon,
-			);
-			target = ED7054842E61F57000CA7926 /* WidgetExtension */;
 		};
 		ED70549B2E61F57100CA7926 /* Exceptions for "Widget" folder in "WidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
@@ -199,6 +193,7 @@
 				Utility/Date.swift,
 				Utility/HTTPLogSinkManager.swift,
 				Utility/LiveActivityManager.swift,
+				Utility/RivianTokens.swift,
 				Utility/SwiftDataFakeVehicleProvider.swift,
 				Utility/TemperatureDisplay.swift,
 				Utility/VehicleUtility.swift,
@@ -240,6 +235,7 @@
 				Utility/Date.swift,
 				Utility/HTTPLogSinkManager.swift,
 				Utility/LiveActivityManager.swift,
+				Utility/RivianTokens.swift,
 				Utility/SwiftDataFakeVehicleProvider.swift,
 				Utility/TemperatureDisplay.swift,
 				Utility/VehicleUtility.swift,
@@ -283,7 +279,6 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				ED4E60132E6BDE2800F9ED90 /* Exceptions for "GhostBlueWatch Watch App" folder in "GhostBlue" target */,
-				ED4E60142E6BDE2800F9ED90 /* Exceptions for "GhostBlueWatch Watch App" folder in "WidgetExtension" target */,
 			);
 			path = "GhostBlueWatch Watch App";
 			sourceTree = "<group>";
@@ -869,7 +864,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = GhostBlue/GhostBlue.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 32;
 				DEVELOPMENT_ASSET_PATHS = "\"GhostBlue/Preview Content\"";
 				DEVELOPMENT_TEAM = MLDS8B3YHY;
 				ENABLE_PREVIEWS = YES;
@@ -905,7 +900,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = GhostBlue/GhostBlue.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 32;
 				DEVELOPMENT_ASSET_PATHS = "\"GhostBlue/Preview Content\"";
 				DEVELOPMENT_TEAM = MLDS8B3YHY;
 				ENABLE_PREVIEWS = YES;
@@ -941,7 +936,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "GhostBlueWatch Watch App/GhostBlueWatch Watch App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 32;
 				DEVELOPMENT_TEAM = MLDS8B3YHY;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -976,7 +971,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "GhostBlueWatch Watch App/GhostBlueWatch Watch App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 32;
 				DEVELOPMENT_TEAM = MLDS8B3YHY;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1011,7 +1006,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = WidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 32;
 				DEVELOPMENT_TEAM = MLDS8B3YHY;
 				ENABLE_ONLY_ACTIVE_RESOURCES = NO;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1045,7 +1040,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = WidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 32;
 				DEVELOPMENT_TEAM = MLDS8B3YHY;
 				ENABLE_ONLY_ACTIVE_RESOURCES = NO;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1078,7 +1073,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 32;
 				DEVELOPMENT_TEAM = MLDS8B3YHY;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = WatchWidget/Info.plist;
@@ -1111,7 +1106,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 32;
 				DEVELOPMENT_TEAM = MLDS8B3YHY;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = WatchWidget/Info.plist;

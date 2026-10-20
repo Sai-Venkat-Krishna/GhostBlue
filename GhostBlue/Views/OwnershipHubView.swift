@@ -39,10 +39,12 @@ struct OwnershipHubView: View {
                 Section("Vehicle") {
                     NavigationLink {
                         VehicleInfoView(bbVehicle: vehicle)
+                            .rivianListBackground()
                     } label: {
                         OwnershipDestinationLabel(
                             icon: "car.fill",
                             color: .blue,
+                            rivianTint: RV.vehicleCenter,
                             title: "Overview",
                             detail: "Name, appearance, powertrain, widgets, and VIN"
                         )
@@ -50,10 +52,12 @@ struct OwnershipHubView: View {
 
                     NavigationLink {
                         VehicleClimateSettingsView(bbVehicle: vehicle)
+                            .rivianListBackground()
                     } label: {
                         OwnershipDestinationLabel(
                             icon: "fan.fill",
                             color: .teal,
+                            rivianTint: RV.climate,
                             title: "Climate",
                             detail: "Seat heat availability and preset duration"
                         )
@@ -62,10 +66,12 @@ struct OwnershipHubView: View {
                     if vehicle.fuelType.hasElectricCapability {
                         NavigationLink {
                             ChargingIntelligenceView(vehicle: vehicle)
+                                .rivianListBackground()
                         } label: {
                             OwnershipDestinationLabel(
                                 icon: "bolt.fill",
                                 color: .green,
+                                rivianTint: RV.energy,
                                 title: "Charging",
                                 detail: "Limits, costs, smart schedule, and budget"
                             )
@@ -76,10 +82,12 @@ struct OwnershipHubView: View {
                 Section("Intelligence") {
                     NavigationLink {
                         SmartAlertRulesView(vehicle: vehicle)
+                            .rivianListBackground()
                     } label: {
                         OwnershipDestinationLabel(
                             icon: "bell.badge.fill",
                             color: .orange,
+                            rivianTint: RV.service,
                             title: "Smart alerts",
                             detail: "Charging, security, battery, and tire rules"
                         )
@@ -87,10 +95,12 @@ struct OwnershipHubView: View {
 
                     NavigationLink {
                         RemoteCommandActivityView(selectedVIN: vehicle.vin)
+                            .rivianListBackground()
                     } label: {
                         OwnershipDestinationLabel(
                             icon: "bolt.horizontal.circle.fill",
                             color: .cyan,
+                            rivianTint: RV.vehicleCenter,
                             title: "Remote activity",
                             detail: "Commands from iPhone, widgets, shortcuts, and Watch"
                         )
@@ -98,10 +108,12 @@ struct OwnershipHubView: View {
 
                     NavigationLink {
                         MaintenanceCenterView(vehicle: vehicle)
+                            .rivianListBackground()
                     } label: {
                         OwnershipDestinationLabel(
                             icon: "wrench.adjustable.fill",
                             color: .purple,
+                            rivianTint: RV.location,
                             title: "Maintenance",
                             detail: "Service schedule and ownership reminders"
                         )
@@ -109,10 +121,12 @@ struct OwnershipHubView: View {
 
                     NavigationLink {
                         VehicleAutomationsView(vehicle: vehicle)
+                            .rivianListBackground()
                     } label: {
                         OwnershipDestinationLabel(
                             icon: "wand.and.stars.inverse",
                             color: .indigo,
+                            rivianTint: RV.location,
                             title: "Personal automations",
                             detail: "Battery, unplugged, and precondition reminders"
                         )
@@ -155,6 +169,7 @@ struct OwnershipHubView: View {
 
         }
         .navigationTitle("Vehicle Center")
+        .rivianListBackground()
     }
 
     private func moveVehicles(from source: IndexSet, to destination: Int) {
@@ -187,10 +202,31 @@ struct OwnershipHubView: View {
 private struct OwnershipDestinationLabel: View {
     let icon: String
     let color: Color
+    /// Chip colour under the Rivian theme.
+    var rivianTint: Color?
     let title: String
     let detail: String
+    @State private var settings = AppSettings.shared
 
     var body: some View {
+        if settings.appTheme == .rivian {
+            HStack(spacing: 12) {
+                SettingsIconChip(systemImage: icon, tint: rivianTint ?? color)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.headline)
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 4)
+        } else {
+            classicLabel
+        }
+    }
+
+    private var classicLabel: some View {
         Label {
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
@@ -1071,6 +1107,7 @@ private struct VehicleAutomationsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \VehicleAutomation.createdAt, order: .reverse)
     private var allRules: [VehicleAutomation]
+    @State private var appSettings = AppSettings.shared
 
     private var rules: [VehicleAutomation] {
         allRules.filter { $0.vin == vehicle.vin }
@@ -1085,6 +1122,18 @@ private struct VehicleAutomationsView: View {
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            }
+
+            if !appSettings.notificationsEnabled {
+                Section {
+                    Label(
+                        "Notifications are off, so these rules can't alert you.",
+                        systemImage: "bell.slash.fill"
+                    )
+                    .font(.subheadline)
+                    .foregroundStyle(.orange)
+                    Toggle("Enable notifications", isOn: $appSettings.notificationsEnabled)
+                }
             }
 
             if rules.isEmpty {
@@ -1188,34 +1237,20 @@ private struct VehicleAutomationsView: View {
     }
 
     private func delete(at offsets: IndexSet) {
-        for index in offsets {
-            let rule = rules[index]
-            UNUserNotificationCenter.current().removePendingNotificationRequests(
-                withIdentifiers: ["automation-\(rule.id.uuidString)"]
-            )
+        let doomed = offsets.map { rules[$0] }
+        for rule in doomed {
             modelContext.delete(rule)
         }
         try? modelContext.save()
+        syncReminders()
     }
 
-    private func updateScheduledReminder(for rule: VehicleAutomation) {
-        let identifier = "automation-\(rule.id.uuidString)"
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [identifier])
-        guard rule.isEnabled, rule.kind == .preconditionReminder else { return }
-        let content = UNMutableNotificationContent()
-        content.title = rule.title
-        content.body = "Open GhostBlue to review conditions and start climate."
-        content.sound = .default
-        content.userInfo = ["vin": vehicle.vin]
-        let trigger = UNCalendarNotificationTrigger(
-            dateMatching: DateComponents(hour: rule.hour, minute: rule.minute),
-            repeats: true
-        )
-        Task {
-            try? await UNUserNotificationCenter.current().add(
-                UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
-            )
-        }
+    private func updateScheduledReminder(for _: VehicleAutomation) {
+        syncReminders()
+    }
+
+    private func syncReminders() {
+        Task { await AutomationReminderScheduler.sync(in: modelContext) }
     }
 }
 
@@ -1312,6 +1347,8 @@ struct PrivacySecurityView: View {
                 try? modelContext.delete(model: MaintenanceReminder.self)
                 try? modelContext.delete(model: VehicleAutomation.self)
                 try? modelContext.save()
+                // Deleted rules must not leave their daily reminders behind.
+                Task { await AutomationReminderScheduler.sync(in: modelContext) }
             }
         } message: {
             Text("This permanently removes trips, charging sessions, remote activity, maintenance reminders, and automations.")

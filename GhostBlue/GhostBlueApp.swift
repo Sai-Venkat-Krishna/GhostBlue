@@ -20,6 +20,7 @@ extension Notification.Name {
 struct GhostBlueApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @Environment(\.scenePhase) private var scenePhase
+    @State private var appSettings = AppSettings.shared
 
     var sharedModelContainer: ModelContainer = {
         // Configure BetterBlueKit to use OSLog via AppLogger
@@ -65,6 +66,7 @@ struct GhostBlueApp: App {
                     handleDeepLink(url)
                 }
                 .task {
+                    await AutomationReminderScheduler.sync(in: sharedModelContainer.mainContext)
                     await reconcileEnabledSmartChargingVehicles()
                     await VehicleRefreshPolicy.run(interval: { 60 }) {
                         guard scenePhase == .active else { return }
@@ -74,8 +76,14 @@ struct GhostBlueApp: App {
                 .onChange(of: scenePhase) { _, newPhase in
                     guard newPhase == .active else { return }
                     Task {
+                        // Rules may have been removed elsewhere (account
+                        // deletion, another device's restore) while away.
+                        await AutomationReminderScheduler.sync(in: sharedModelContainer.mainContext)
                         await reconcileEnabledSmartChargingVehicles()
                     }
+                }
+                .onChange(of: appSettings.notificationsEnabled) { _, _ in
+                    Task { await AutomationReminderScheduler.sync(in: sharedModelContainer.mainContext) }
                 }
         }
         .modelContainer(sharedModelContainer)

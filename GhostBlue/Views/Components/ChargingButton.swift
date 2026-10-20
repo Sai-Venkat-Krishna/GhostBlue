@@ -172,16 +172,9 @@ struct ChargingButton: View {
             if shouldStart {
                 try await account.startCharge(bbVehicle, modelContext: context)
             } else {
+                // No immediate read: it would wake the car only to see the
+                // old state. waitForStatusChange polls once it has settled.
                 try await account.stopCharge(bbVehicle, modelContext: context)
-                do {
-                    try await account.fetchAndUpdateVehicleStatus(
-                        for: bbVehicle,
-                        modelContext: context,
-                        cached: false
-                    )
-                } catch {
-                    BBLogger.warning(.app, "ChargingButton: Failed to fetch status after stop command: \(error)")
-                }
             }
 
             try await bbVehicle.waitForStatusChange(

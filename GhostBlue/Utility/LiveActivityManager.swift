@@ -88,9 +88,6 @@ final class LiveActivityManager {
                 // Fetch fresh status (async call)
                 let status = try await account.fetchVehicleStatus(for: vehicle, modelContext: context)
 
-                // Update vehicle with new status
-                vehicle.updateStatus(with: status)
-
                 // Update the Live Activity with increment wakeup count
                 await refreshActivity(for: vin, status: status, incrementWakeup: true)
 

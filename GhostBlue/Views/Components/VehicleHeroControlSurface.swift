@@ -118,19 +118,9 @@ final class VehicleHeroCommandCenter {
                     presetIcon: presetIcon
                 )
             } else {
+                // No immediate read: it would wake the car only to see the
+                // old state. waitForStatusChange polls once it has settled.
                 try await account.stopClimate(vehicle, modelContext: modelContext)
-                do {
-                    try await account.fetchAndUpdateVehicleStatus(
-                        for: vehicle,
-                        modelContext: modelContext,
-                        cached: false
-                    )
-                } catch {
-                    BBLogger.warning(
-                        .app,
-                        "Hero: Failed to fetch status after climate stop: \(error)"
-                    )
-                }
             }
 
             try await vehicle.waitForStatusChange(
@@ -156,19 +146,9 @@ final class VehicleHeroCommandCenter {
             if shouldStart {
                 try await account.startCharge(vehicle, modelContext: modelContext)
             } else {
+                // No immediate read: it would wake the car only to see the
+                // old state. waitForStatusChange polls once it has settled.
                 try await account.stopCharge(vehicle, modelContext: modelContext)
-                do {
-                    try await account.fetchAndUpdateVehicleStatus(
-                        for: vehicle,
-                        modelContext: modelContext,
-                        cached: false
-                    )
-                } catch {
-                    BBLogger.warning(
-                        .app,
-                        "Hero: Failed to fetch status after charge stop: \(error)"
-                    )
-                }
             }
 
             try await vehicle.waitForStatusChange(

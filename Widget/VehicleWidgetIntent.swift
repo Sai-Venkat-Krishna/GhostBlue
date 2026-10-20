@@ -88,6 +88,7 @@ struct VehicleEntity: AppEntity {
 
     // Charging state
     var isCharging: Bool = false
+    var chargingState: ChargingDisplayState = .unknown
     var isPluggedIn: Bool = false
     var chargeRemainingSeconds: Int64 = 0   // 0 = unknown
     var chargeSpeedKW: Double = 0           // 0 = unknown
@@ -105,7 +106,7 @@ struct VehicleEntity: AppEntity {
 
     /// True when the vehicle is physically plugged in but the charge cycle is finished.
     var isChargeComplete: Bool {
-        isPluggedIn && !isCharging
+        isPluggedIn && !isCharging && targetSOC.map { (batteryPercentage ?? 0) >= $0 - 1 } == true
     }
 
     var displayRepresentation: DisplayRepresentation {
@@ -167,7 +168,10 @@ struct VehicleEntity: AppEntity {
         vin = bbVehicle.vin
         fuelType = bbVehicle.fuelType
         backgroundColorName = bbVehicle.backgroundColorName
-        timestamp = bbVehicle.lastUpdated ?? Date()
+        // A vehicle that has never been refreshed has no sample date;
+        // .distantPast would render as "2025 years ago".
+        timestamp = bbVehicle.vehicleSampleDate ?? Date()
+        chargingState = bbVehicle.chargingDisplayState()
         model = bbVehicle.model
 
         // Format odometer

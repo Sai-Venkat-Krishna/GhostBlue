@@ -23,7 +23,7 @@ struct LoadingOverlayView: View {
                     .fontWeight(.semibold)
                     .foregroundColor(.primary)
 
-                ProgressView()
+                BrandProgressView()
                     .progressViewStyle(CircularProgressViewStyle(tint: .blue))
                     .scaleEffect(1.2)
             }

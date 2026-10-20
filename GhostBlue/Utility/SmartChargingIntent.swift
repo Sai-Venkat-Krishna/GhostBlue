@@ -20,8 +20,7 @@ struct ReconcileSmartChargingIntent: AppIntent {
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let modelContainer = try createSharedModelContainer(enableCloudKit: false)
         let context = ModelContext(modelContainer)
-        let vehicles = try context.fetch(FetchDescriptor<BBVehicle>())
-            .filter(\.smartChargingEnabled)
+        let vehicles = try context.fetch(FetchDescriptor<BBVehicle>(predicate: #Predicate { $0.smartChargingEnabled }))
 
         guard !vehicles.isEmpty else {
             return .result(dialog: "No vehicles have Smart Charging enabled in GhostBlue.")

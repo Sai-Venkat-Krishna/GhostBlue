@@ -17,6 +17,8 @@ class CachedAPIClient: APIClientProtocol {
 
     // Track ongoing requests to prevent duplicates - using a protocol-based approach
     private var ongoingRequests: [RequestKey: any OngoingRequest] = [:]
+    private var statusGenerations: [String: Int] = [:]
+    private var latestStatusRequests: [String: UUID] = [:]
 
     // Cache TTL in seconds — 30s prevents duplicate calls from rapid multi-trigger scenarios
     // (widget refresh + app foreground + background timer all firing within seconds).
@@ -113,7 +115,9 @@ class CachedAPIClient: APIClientProtocol {
         authToken: AuthToken,
         cached: Bool
     ) async throws -> VehicleStatus {
-        let requestKey = RequestKey.fetchVehicleStatus(vin: vehicle.vin)
+        try Task.checkCancellation()
+        let generation = statusGenerations[vehicle.vin, default: 0]
+        let requestKey = RequestKey.fetchVehicleStatus(vin: vehicle.vin, cached: cached, generation: generation)
         let cacheKey = CacheKey.fetchVehicleStatus(vin: vehicle.vin)
 
         // When the caller explicitly requests a real-time status (manual sync,
@@ -133,11 +137,11 @@ class CachedAPIClient: APIClientProtocol {
             return cachedStatus
         }
 
-        // Check if there's already an ongoing request of this type. We still
-        // coalesce in-flight real-time requests: if two force-refresh taps
-        // fire, the second awaits the first rather than double-polling the
-        // vehicle modem.
-        if let ongoingRequest = ongoingRequests[requestKey] {
+        // A cached reader may join a real-time request, but a real-time
+        // caller must never join a server-cached read. Command generations
+        // also prevent verification from joining a pre-command request.
+        let freshKey = RequestKey.fetchVehicleStatus(vin: vehicle.vin, cached: false, generation: generation)
+        if let ongoingRequest = ongoingRequests[freshKey] ?? ongoingRequests[requestKey] {
             BBLogger.debug(.api, "CachedAPIClient:Waiting for ongoing fetchVehicleStatus request for VIN: \(vehicle.vin)")
             guard let vehicleStatus = try await ongoingRequest.waitForCompletion() as? VehicleStatus else {
                 throw APIError.logError("Error retrieving vehicles from ongoing request")
@@ -145,7 +149,8 @@ class CachedAPIClient: APIClientProtocol {
             return vehicleStatus
         }
 
-        // Create new request task
+        let requestID = UUID()
+        latestStatusRequests[vehicle.vin] = requestID
         let task = Task<VehicleStatus, any Error> {
             defer {
                 ongoingRequests.removeValue(forKey: requestKey)
@@ -161,8 +166,11 @@ class CachedAPIClient: APIClientProtocol {
                 cached: cached
             )
 
-            // Cache successful response
-            cache[cacheKey] = CacheEntry(response: result, timestamp: Date())
+            // A slower cached read cannot overwrite a newer real-time read,
+            // and pre-command responses cannot repopulate invalidated data.
+            if latestStatusRequests[vehicle.vin] == requestID {
+                cache[cacheKey] = CacheEntry(response: result, timestamp: Date())
+            }
 
             return result
         }
@@ -195,6 +203,7 @@ class CachedAPIClient: APIClientProtocol {
 
             BBLogger.debug(.api, "CachedAPIClient:Performing new sendCommand request for VIN: \(vehicle.vin)")
             try await underlyingClient.sendCommand(for: vehicle, command: command, authToken: authToken)
+            invalidateStatusCache(for: vehicle.vin)
         }
 
         ongoingRequests[requestKey] = TypedOngoingRequest(task: task)
@@ -209,6 +218,8 @@ class CachedAPIClient: APIClientProtocol {
 
     /// Invalidates the cached status for a specific vehicle
     func invalidateStatusCache(for vin: String) {
+        statusGenerations[vin, default: 0] += 1
+        latestStatusRequests.removeValue(forKey: vin)
         let cacheKey = CacheKey.fetchVehicleStatus(vin: vin)
         if cache.removeValue(forKey: cacheKey) != nil {
             BBLogger.debug(.api, "CachedAPIClient:Invalidated status cache for VIN: \(vin)")
@@ -219,6 +230,10 @@ class CachedAPIClient: APIClientProtocol {
 
     func clearCache() {
         cache.removeAll()
+        for vin in Set(statusGenerations.keys).union(latestStatusRequests.keys) {
+            statusGenerations[vin, default: 0] += 1
+        }
+        latestStatusRequests.removeAll()
         BBLogger.debug(.api, "CachedAPIClient:Cache cleared")
     }
 
@@ -280,7 +295,7 @@ private enum CacheKey: Hashable {
 private enum RequestKey: Hashable {
     case login
     case fetchVehicles
-    case fetchVehicleStatus(vin: String)
+    case fetchVehicleStatus(vin: String, cached: Bool, generation: Int)
     case sendCommand(vin: String, command: String)
 }
 

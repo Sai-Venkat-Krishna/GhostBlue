@@ -22,9 +22,23 @@ struct ChargingCostSettingsView: View {
                         save()
                     }
 
-                Text("Enter the usable battery capacity in kWh. This makes charge-session energy estimates accurate even when the app was not polling continuously.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                if batteryCapacity <= 0,
+                   let modelDefault = BatteryCapacityCatalog.defaultCapacityKWh(
+                       model: vehicle.model,
+                       fuelType: vehicle.fuelType
+                   ) {
+                    Button("Use \(modelDefault.formatted(.number.precision(.fractionLength(0 ... 1)))) kWh (\(vehicle.model) default)") {
+                        batteryCapacity = modelDefault
+                    }
+                }
+
+                Text(
+                    batteryCapacity <= 0 && vehicle.effectiveBatteryCapacityKWh != nil
+                        ? "Charging history currently uses the model default. Enter your car's usable capacity in kWh if it has a different battery pack."
+                        : "Enter the usable battery capacity in kWh. This makes charge-session energy estimates accurate even when the app was not polling continuously."
+                )
+                .font(.footnote)
+                .foregroundStyle(.secondary)
             }
 
             Section("Charging prices") {

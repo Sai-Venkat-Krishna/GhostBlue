@@ -145,7 +145,7 @@ struct AccountInfoView: View {
         .disabled(isLoading)
         .overlay {
             if isLoading {
-                ProgressView()
+                BrandProgressView()
                     .scaleEffect(1.5)
             }
         }

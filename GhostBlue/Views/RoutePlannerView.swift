@@ -141,7 +141,7 @@ struct RoutePlannerView: View {
             if isPlanning {
                 Section {
                     HStack {
-                        ProgressView()
+                        BrandProgressView()
                         Text("Asking ABRP for charging stops…")
                             .foregroundStyle(.secondary)
                     }
@@ -188,7 +188,7 @@ struct RoutePlannerView: View {
                 }
                 destination = Destination(
                     name: completion.title,
-                    coordinate: item.placemark.coordinate)
+                    coordinate: item.location.coordinate)
                 try await plan()
             } catch {
                 errorMessage = error.localizedDescription

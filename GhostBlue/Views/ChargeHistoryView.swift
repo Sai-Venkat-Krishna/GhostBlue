@@ -11,6 +11,7 @@ import BetterBlueKit
 import Charts
 import SwiftData
 import SwiftUI
+import UniformTypeIdentifiers
 
 private enum ChargeHistoryRange: Int, CaseIterable, Identifiable {
     case week = 7
@@ -26,6 +27,21 @@ private enum ChargeHistoryRange: Int, CaseIterable, Identifiable {
         case .month: "Month"
         case .quarter: "3 months"
         }
+    }
+
+    /// Three months of daily bars are unreadably thin, so that range is
+    /// summed per week.
+    var bucket: Calendar.Component { self == .quarter ? .weekOfYear : .day }
+
+    /// Start of the first calendar day in the range, so "Week" is today plus
+    /// the six days before it and the chart, totals and list agree.
+    func start(endingAt now: Date = Date(), calendar: Calendar = .current) -> Date {
+        ChargeHistoryRange.start(days: dayCount, endingAt: now, calendar: calendar)
+    }
+
+    static func start(days: Int, endingAt now: Date = Date(), calendar: Calendar = .current) -> Date {
+        let today = calendar.startOfDay(for: now)
+        return calendar.date(byAdding: .day, value: -(max(1, days) - 1), to: today) ?? today
     }
 }
 
@@ -64,9 +80,14 @@ private struct ChargeEnergyDayPoint: Identifiable {
 
 /// One charging session as a glass card: charge gained, energy, window.
 struct ChargeSessionCard: View {
+    @State private var badgeSettings = AppSettings.shared
+    private var badgeTint: Color { badgeSettings.appTheme == .rivian ? RV.energy : .cyan }
     let session: ChargeSession
-    var batteryCapacityKWh: Double?
-    var electricityRatePerKWh: Double?
+    /// Resolved by the vehicle (manual reading, battery estimate, or bounded
+    /// samples) so the card always agrees with the totals and the chart.
+    let energyKWh: Double
+    let energySource: String
+    var cost: Double?
 
     private var headline: String {
         var parts: [String] = []
@@ -82,19 +103,10 @@ struct ChargeSessionCard: View {
         return parts.joined(separator: " · ")
     }
 
-    private var estimatedEnergyKWh: Double {
-        guard let capacity = batteryCapacityKWh, capacity > 0, session.percentAdded > 0 else {
-            return session.energyAddedKWh
-        }
-        return capacity * session.percentAdded / 100
-    }
+    private var estimatedEnergyKWh: Double { energyKWh }
 
     private var estimatedCost: Double? {
-        if let actualCost = session.actualCost, actualCost >= 0 {
-            return actualCost
-        }
-        guard let rate = electricityRatePerKWh, rate > 0, estimatedEnergyKWh > 0 else { return nil }
-        return estimatedEnergyKWh * rate
+        cost
     }
 
     private var durationText: String {
@@ -129,8 +141,8 @@ struct ChargeSessionCard: View {
                                 .font(.system(size: 9, weight: .heavy))
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 1.5)
-                                .background(Capsule().fill(Color.cyan.opacity(0.25)))
-                                .foregroundStyle(.cyan)
+                                .background(Capsule().fill(badgeTint.opacity(0.25)))
+                                .foregroundStyle(badgeTint)
                         }
                     }
 
@@ -145,6 +157,8 @@ struct ChargeSessionCard: View {
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
                 }
 
                 Spacer()
@@ -168,6 +182,9 @@ struct ChargeSessionCard: View {
             }
 
             Divider()
+
+            Text(energySource)
+                .font(.caption2).foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 7) {
                 timestampRow("Started", date: session.startDate, systemImage: "play.circle.fill")
@@ -234,12 +251,32 @@ struct ChargeHistoryView: View {
     var onSelectVehicle: ((Int) -> Void)?
     @Query(sort: \ChargeSession.startDate, order: .reverse)
     private var allSessions: [ChargeSession]
+    @State private var showingSchedule = false
+    @State private var exportingHistory = false
+    @State private var exportCSV = ""
+    @State private var exportError: String?
+
+    init(bbVehicle: BBVehicle, vehicleOptions: [BBVehicle] = [], onSelectVehicle: ((Int) -> Void)? = nil) {
+        self.bbVehicle = bbVehicle
+        self.vehicleOptions = vehicleOptions
+        self.onSelectVehicle = onSelectVehicle
+        let vin = bbVehicle.vin
+        _allSessions = Query(filter: #Predicate<ChargeSession> { $0.vin == vin },
+                             sort: \ChargeSession.startDate, order: .reverse)
+    }
     @State private var selectedRange: ChargeHistoryRange = .month
     @State private var selectedPowerFilter: ChargePowerFilter = .all
     @State private var selectedChargeDay: Date?
     @State private var editingSession: ChargeSession?
     @State private var showingManualEntry = false
     @State private var showingCostSettings = false
+    @State private var appSettings = AppSettings.shared
+
+    /// Energy accent: Rivian green under the Rivian theme, classic cyan otherwise.
+    private var energyTint: Color { appSettings.appTheme == .rivian ? RV.energy : .cyan }
+    private var energyGradient: [Color] {
+        appSettings.appTheme == .rivian ? [RV.energy, RV.energy.opacity(0.55)] : [.cyan, .blue]
+    }
 
     private var sessions: [ChargeSession] {
         allSessions.filter { $0.vin == bbVehicle.vin && $0.isMeaningful }
@@ -250,26 +287,14 @@ struct ChargeHistoryView: View {
     }
 
     private var displayedSessions: [ChargeSession] {
-        let start = Calendar.current.date(
-            byAdding: .day,
-            value: -selectedRange.dayCount,
-            to: Date()
-        ) ?? .distantPast
+        let start = selectedRange.start()
         return powerFilteredSessions.filter { $0.startDate >= start }
     }
 
     private var previousSessions: [ChargeSession] {
-        let calendar = Calendar.current
-        let end = calendar.date(
-            byAdding: .day,
-            value: -selectedRange.dayCount,
-            to: Date()
-        ) ?? .distantPast
-        let start = calendar.date(
-            byAdding: .day,
-            value: -(selectedRange.dayCount * 2),
-            to: Date()
-        ) ?? .distantPast
+        let end = selectedRange.start()
+        let start = Calendar.current.date(byAdding: .day, value: -selectedRange.dayCount, to: end)
+            ?? .distantPast
         return powerFilteredSessions.filter { $0.startDate >= start && $0.startDate < end }
     }
 
@@ -308,26 +333,70 @@ struct ChargeHistoryView: View {
     }
 
     private func energyDelivered(inLastDays dayCount: Int) -> Double {
-        let start = Calendar.current.date(byAdding: .day, value: -dayCount, to: Date())
-            ?? .distantPast
+        let start = ChargeHistoryRange.start(days: dayCount)
         return powerFilteredSessions
             .filter { $0.startDate >= start }
             .reduce(0) { $0 + energy(for: $1) }
     }
 
-    private var dailyEnergyPoints: [ChargeEnergyDayPoint] {
+    private func bucketStart(for date: Date) -> Date {
         let calendar = Calendar.current
-        return Dictionary(grouping: displayedSessions) {
-            calendar.startOfDay(for: $0.startDate)
+        return calendar.dateInterval(of: selectedRange.bucket, for: date)?.start
+            ?? calendar.startOfDay(for: date)
+    }
+
+    private var dailyEnergyPoints: [ChargeEnergyDayPoint] {
+        Dictionary(grouping: displayedSessions) { bucketStart(for: $0.startDate) }
+            .map { day, sessions in
+                ChargeEnergyDayPoint(
+                    day: day,
+                    energyKWh: sessions.reduce(0) { $0 + energy(for: $1) },
+                    sessionCount: sessions.count
+                )
+            }
+            .sorted { $0.day < $1.day }
+    }
+
+    /// A fixed domain keeps the selected period on screen even when only one
+    /// day has a session; otherwise the axis collapses onto that day.
+    private var trendDomain: ClosedRange<Date> {
+        let calendar = Calendar.current
+        let start = bucketStart(for: selectedRange.start())
+        let endOfToday = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date())) ?? Date()
+        let end = calendar.dateInterval(of: selectedRange.bucket, for: endOfToday.addingTimeInterval(-1))?.end
+            ?? endOfToday
+        return start ... max(end, start.addingTimeInterval(86_400))
+    }
+
+    /// Daily ticks for a week (labelled by weekday, centred on the bar),
+    /// weekly for a month and three-weekly for three months. Ticks close to
+    /// the trailing edge are dropped: their labels would be clipped to "…".
+    private var trendAxisDates: [Date] {
+        let calendar = Calendar.current
+        let domain = trendDomain
+        let stepDays = switch selectedRange {
+        case .week: 1
+        case .month: 7
+        case .quarter: 21
         }
-        .map { day, sessions in
-            ChargeEnergyDayPoint(
-                day: day,
-                energyKWh: sessions.reduce(0) { $0 + energy(for: $1) },
-                sessionCount: sessions.count
-            )
+        let margin: TimeInterval = selectedRange == .week ? 0 : Double(stepDays) * 86_400 * 0.4
+        var dates: [Date] = []
+        var cursor = domain.lowerBound
+        while cursor < domain.upperBound.addingTimeInterval(-margin) {
+            dates.append(cursor)
+            guard let next = calendar.date(byAdding: .day, value: stepDays, to: cursor) else { break }
+            cursor = next
         }
-        .sorted { $0.day < $1.day }
+        // A centred label spans to the next tick, so today's bar needs a
+        // closing tick at the end of the domain to get its weekday.
+        if selectedRange == .week {
+            dates.append(domain.upperBound)
+        }
+        return dates
+    }
+
+    private var hasTrendEnergy: Bool {
+        dailyEnergyPoints.contains { $0.energyKWh >= 0.05 }
     }
 
     private var energyChange: Double? {
@@ -342,9 +411,14 @@ struct ChargeHistoryView: View {
 
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(spacing: 12) {
+                    LazyVStack(spacing: 12) {
                         header
                             .id("charging-top")
+                        if appSettings.appTheme == .rivian {
+                            RivianEnergyHero(bbVehicle: bbVehicle)
+                        } else {
+                            ChargingStatusSummary(vehicle: bbVehicle)
+                        }
 
                         if sessions.isEmpty {
                             emptyCard
@@ -365,8 +439,9 @@ struct ChargeHistoryView: View {
                                     VStack(spacing: 6) {
                                         ChargeSessionCard(
                                             session: session,
-                                            batteryCapacityKWh: bbVehicle.batteryCapacityKWh,
-                                            electricityRatePerKWh: bbVehicle.chargingRate(for: session)
+                                            energyKWh: energy(for: session),
+                                            energySource: bbVehicle.energySource(for: session),
+                                            cost: bbVehicle.chargingCost(for: session)
                                         )
 
                                         Button {
@@ -395,7 +470,26 @@ struct ChargeHistoryView: View {
                 }
             }
         }
-        .environment(\.colorScheme, bbVehicle.backgroundColorScheme)
+        .ghostBlueColorScheme(classic: bbVehicle.backgroundColorScheme)
+        .rivianStatusBarBackdrop()
+        .onChange(of: selectedRange) { _, _ in selectedChargeDay = nil }
+        .onChange(of: selectedPowerFilter) { _, _ in selectedChargeDay = nil }
+        .sheet(isPresented: $showingSchedule) {
+            NavigationStack {
+                Form { SmartChargingScheduleSection(vehicle: bbVehicle) }
+                    .navigationTitle("Smart Charging")
+                    .toolbar { ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { showingSchedule = false }
+                    } }
+            }
+        }
+        .fileExporter(isPresented: $exportingHistory, document: TripCSVDocument(csv: exportCSV),
+                      contentType: .commaSeparatedText, defaultFilename: "GhostBlue-Charging") { result in
+            if case let .failure(error) = result { exportError = error.localizedDescription }
+        }
+        .alert("Export Failed", isPresented: Binding(get: { exportError != nil }, set: { if !$0 { exportError = nil } })) {
+            Button("OK") { exportError = nil }
+        } message: { Text(exportError ?? "") }
         .sheet(item: $editingSession) { session in
             NavigationStack {
                 ChargeSessionEditor(session: session, vehicle: bbVehicle)
@@ -465,16 +559,50 @@ struct ChargeHistoryView: View {
             )
             .font(.caption2)
             .foregroundStyle(.secondary)
+
+            capacityNote
         }
         .padding(16)
         .gbGlassCard()
+    }
+
+    /// Energy is charge added × usable capacity, so say which capacity is in
+    /// use and offer to correct a model default.
+    @ViewBuilder
+    private var capacityNote: some View {
+        if bbVehicle.isUsingModelDefaultBatteryCapacity, let capacity = bbVehicle.effectiveBatteryCapacityKWh {
+            Button {
+                showingCostSettings = true
+            } label: {
+                Label(
+                    "Using the \(capacity.formatted(.number.precision(.fractionLength(0 ... 1)))) kWh \(bbVehicle.model) default. Tap to set your exact capacity.",
+                    systemImage: "info.circle"
+                )
+                .font(.caption2)
+                .multilineTextAlignment(.leading)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+        } else if bbVehicle.effectiveBatteryCapacityKWh == nil {
+            Button {
+                showingCostSettings = true
+            } label: {
+                Label(
+                    "Set your battery's usable capacity for accurate energy totals.",
+                    systemImage: "exclamationmark.circle"
+                )
+                .font(.caption2.weight(.semibold))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.orange)
+        }
     }
 
     private func energyDeliveredMetric(title: String, energyKWh: Double) -> some View {
         VStack(spacing: 4) {
             Text(energyKWh.formatted(.number.precision(.fractionLength(1))))
                 .font(.headline.bold())
-                .foregroundStyle(.cyan)
+                .foregroundStyle(energyTint)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             Text("kWh")
@@ -494,12 +622,24 @@ struct ChargeHistoryView: View {
     private var header: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Charging")
+                Text(appSettings.appTheme == .rivian ? "Energy" : "Charging")
                     .font(.gbDisplay)
                 vehicleSelector
             }
 
             Spacer()
+
+            Menu {
+                Button("Charging schedule", systemImage: "calendar.badge.clock") { showingSchedule = true }
+                Button("Export selected period (CSV)", systemImage: "square.and.arrow.up") {
+                    exportCSV = ChargingCSVExporter.csv(sessions: displayedSessions, vehicle: bbVehicle)
+                    exportingHistory = true
+                }
+                .disabled(displayedSessions.isEmpty)
+            } label: {
+                Image(systemName: "ellipsis.circle").frame(width: 40, height: 40).gbGlassCircle()
+            }
+            .accessibilityLabel("Charging schedule and export")
 
             Button {
                 showingManualEntry = true
@@ -582,7 +722,7 @@ struct ChargeHistoryView: View {
                 systemImage: "ev.charger.fill",
                 label: "DC fast",
                 value: "\(dcSessionCount)",
-                tint: .cyan
+                tint: energyTint
             )
             if let totalCost {
                 GBStatTile(
@@ -614,48 +754,84 @@ struct ChargeHistoryView: View {
                 }
             }
 
-            Chart(dailyEnergyPoints) { point in
-                BarMark(
-                    x: .value("Day", point.day),
-                    y: .value("Energy", point.energyKWh)
-                )
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.cyan, .blue],
-                        startPoint: .top,
-                        endPoint: .bottom
+            if hasTrendEnergy {
+                Chart(dailyEnergyPoints) { point in
+                    BarMark(
+                        x: .value("Day", point.day, unit: selectedRange.bucket),
+                        y: .value("Energy", point.energyKWh)
                     )
-                )
-                .cornerRadius(4)
-                .accessibilityLabel(point.day.formatted(date: .complete, time: .omitted))
-                .accessibilityValue(
-                    "\(point.energyKWh.formatted(.number.precision(.fractionLength(1)))) kilowatt-hours in \(point.sessionCount) sessions"
-                )
-            }
-            .chartYAxis {
-                AxisMarks(position: .leading) {
-                    AxisGridLine()
-                    AxisValueLabel()
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: energyGradient,
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .cornerRadius(4)
+                    .opacity(selectedPoint == nil || selectedPoint?.day == point.day ? 1 : 0.4)
+                    .accessibilityLabel(point.day.formatted(date: .complete, time: .omitted))
+                    .accessibilityValue(
+                        "\(point.energyKWh.formatted(.number.precision(.fractionLength(1)))) kilowatt-hours in \(point.sessionCount) sessions"
+                    )
                 }
-            }
-            .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 5)) {
-                    AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+                .chartXScale(domain: trendDomain)
+                .chartYScale(domain: .automatic(includesZero: true))
+                .chartYAxis {
+                    AxisMarks(position: .leading) {
+                        AxisGridLine()
+                        AxisValueLabel()
+                    }
                 }
+                .chartXAxis {
+                    AxisMarks(values: trendAxisDates) {
+                        AxisGridLine()
+                        if selectedRange == .week {
+                            AxisValueLabel(format: .dateTime.weekday(.abbreviated), centered: true)
+                        } else {
+                            AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+                        }
+                    }
+                }
+                .chartYAxisLabel("kWh", position: .leading)
+                .chartXSelection(value: $selectedChargeDay)
+                .frame(height: 180)
+                .accessibilityLabel(selectedRange == .quarter ? "Charging energy by week" : "Charging energy by day")
+            } else {
+                VStack(spacing: 8) {
+                    Image(systemName: "chart.bar.xaxis")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                    Text("No energy measured for these sessions yet")
+                        .font(.subheadline.weight(.semibold))
+                    Text(
+                        bbVehicle.effectiveBatteryCapacityKWh == nil
+                            ? "Add your battery's usable capacity so energy can be estimated from the charge added."
+                            : "Energy appears once a session adds charge. Sessions that add no charge are counted as 0 kWh."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    if bbVehicle.effectiveBatteryCapacityKWh == nil {
+                        Button("Set battery capacity") { showingCostSettings = true }
+                            .font(.caption.bold())
+                            .buttonStyle(.bordered)
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: 180)
             }
-            .chartYAxisLabel("kWh", position: .leading)
-            .chartXSelection(value: $selectedChargeDay)
-            .frame(height: 180)
-            .accessibilityLabel("Charging energy by day")
 
             if let selectedPoint {
                 HStack {
-                    Text(selectedPoint.day, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day())
+                    Text(
+                        selectedRange.bucket == .day
+                            ? selectedPoint.day.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+                            : "Week of \(selectedPoint.day.formatted(.dateTime.month(.abbreviated).day()))"
+                    )
                     Spacer()
                     Text(
                         "\(selectedPoint.energyKWh.formatted(.number.precision(.fractionLength(1)))) kWh · \(selectedPoint.sessionCount) session\(selectedPoint.sessionCount == 1 ? "" : "s")"
                     )
-                        .foregroundStyle(.cyan)
+                        .foregroundStyle(energyTint)
                 }
                 .font(.caption.bold())
             }
@@ -664,12 +840,12 @@ struct ChargeHistoryView: View {
         .gbGlassCard()
     }
 
+    /// Only the bar under the finger: snapping to the nearest bar would
+    /// report another day's energy for a day without sessions.
     private var selectedPoint: ChargeEnergyDayPoint? {
         guard let selectedChargeDay else { return nil }
-        return dailyEnergyPoints.min {
-            abs($0.day.timeIntervalSince(selectedChargeDay))
-                < abs($1.day.timeIntervalSince(selectedChargeDay))
-        }
+        let bucket = bucketStart(for: selectedChargeDay)
+        return dailyEnergyPoints.first { $0.day == bucket }
     }
 
     private var chargingInsightsCard: some View {
@@ -726,7 +902,7 @@ struct ChargeHistoryView: View {
     ) -> some View {
         VStack(spacing: 5) {
             Image(systemName: systemImage)
-                .foregroundStyle(.cyan)
+                .foregroundStyle(energyTint)
             Text(value)
                 .font(.caption.bold())
                 .lineLimit(1)
@@ -797,10 +973,13 @@ private struct ChargeSessionEditor: View {
     @State private var rateText = ""
     @State private var actualCostText = ""
     @State private var saveError: String?
+    @State private var useTimeOfUseRates: Bool
+    private let savedTariff: ChargingTariff?
 
     init(session: ChargeSession?, vehicle: BBVehicle) {
         self.session = session
         self.vehicle = vehicle
+        savedTariff = session?.tariff
 
         let now = Date()
         let initialStart = session?.startDate
@@ -808,7 +987,7 @@ private struct ChargeSessionEditor: View {
             ?? now.addingTimeInterval(-3_600)
         let initialEnd = session?.endDate
             ?? max(session?.lastSampleDate ?? now, initialStart.addingTimeInterval(60))
-        let initialLocation = session?.locationType ?? .automatic
+        let initialLocation = session?.locationType ?? (vehicle.smartChargingEnabled ? .home : .automatic)
         let initialIsDCFast = session?.isDCFast ?? false
         let initialRate = session.flatMap { vehicle.chargingRate(for: $0) }
             ?? vehicle.chargingRate(
@@ -824,7 +1003,9 @@ private struct ChargeSessionEditor: View {
         _isCompleted = State(initialValue: session?.endDate != nil || session == nil)
         _startPercentage = State(initialValue: session?.startPercentage ?? 20)
         _endPercentage = State(initialValue: session?.endPercentage ?? 30)
-        _energyText = State(initialValue: Self.numberText(session?.energyAddedKWh))
+        _energyText = State(initialValue: Self.numberText(session?.manualEnergyKWh, includeZero: true))
+        _useTimeOfUseRates = State(initialValue: session?.tariff != nil || (session == nil &&
+            vehicle.chargingTariff(locationType: initialLocation, isDCFast: initialIsDCFast) != nil))
         _peakSpeedText = State(initialValue: Self.numberText(session?.maxChargeSpeedKW))
         _isDCFast = State(initialValue: initialIsDCFast)
         _locationType = State(initialValue: initialLocation)
@@ -870,17 +1051,32 @@ private struct ChargeSessionEditor: View {
     }
 
     private var draftEnergyKWh: Double {
-        if let capacity = vehicle.batteryCapacityKWh,
+        if let manual = nonnegativeDouble(energyText) { return manual }
+        if let capacity = vehicle.effectiveBatteryCapacityKWh,
            capacity > 0,
            endPercentage > startPercentage {
             return capacity * (endPercentage - startPercentage) / 100
         }
-        return nonnegativeDouble(energyText) ?? 0
+        guard let session else { return 0 }
+        // Bound samples by the draft percentages, not the saved ones.
+        let addedPercent = max(0, endPercentage - startPercentage)
+        let ceiling = (vehicle.effectiveBatteryCapacityKWh ?? ChargeSession.maxPlausibleCapacityKWh)
+            * (addedPercent + 1) / 100
+        return min(max(0, session.energyAddedKWh), ceiling)
+    }
+
+    private var draftTariff: ChargingTariff? {
+        guard useTimeOfUseRates else { return nil }
+        guard !isDCFast, locationType == .home || (locationType == .automatic && vehicle.smartChargingEnabled) else { return nil }
+        return savedTariff ?? vehicle.chargingTariff(locationType: locationType, isDCFast: isDCFast)
     }
 
     private var draftCost: Double? {
         if let actualCost = nonnegativeDouble(actualCostText) {
             return actualCost
+        }
+        if let tariff = draftTariff {
+            return tariff.cost(energyKWh: draftEnergyKWh, from: startDate, to: isCompleted ? endDate : (session?.lastSampleDate ?? .now))
         }
         guard let rate = positiveDouble(rateText), draftEnergyKWh > 0 else { return nil }
         return rate * draftEnergyKWh
@@ -933,7 +1129,7 @@ private struct ChargeSessionEditor: View {
                 )
 
                 HStack {
-                    Text("Energy delivered")
+                    Text("Measured energy")
                     Spacer()
                     TextField("Optional", text: $energyText)
                         .keyboardType(.decimalPad)
@@ -955,6 +1151,8 @@ private struct ChargeSessionEditor: View {
                 }
 
                 Toggle("DC fast charging", isOn: $isDCFast)
+                Text("Enter the charger’s kWh reading to override estimates. Leave it blank to estimate from the battery or recorded samples.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
 
             Section("Location") {
@@ -967,6 +1165,13 @@ private struct ChargeSessionEditor: View {
             }
 
             Section {
+                if vehicle.chargingTariff(locationType: locationType, isDCFast: isDCFast) != nil || savedTariff != nil {
+                    Toggle("Split cost by time-of-use periods", isOn: $useTimeOfUseRates)
+                    if draftTariff != nil {
+                        Text("Uses saved tariff rates across the session. Energy is allocated by elapsed time, so the bill remains an estimate.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
                 LabeledContent(
                     "Energy delivered",
                     value: "\(draftEnergyKWh.formatted(.number.precision(.fractionLength(1)))) kWh"
@@ -978,6 +1183,7 @@ private struct ChargeSessionEditor: View {
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .frame(maxWidth: 120)
+                        .disabled(draftTariff != nil)
                 }
 
                 HStack {
@@ -1081,12 +1287,14 @@ private struct ChargeSessionEditor: View {
             endDate: isCompleted ? endDate : nil,
             startPercentage: startPercentage,
             endPercentage: endPercentage,
-            energyAddedKWh: nonnegativeDouble(energyText) ?? 0,
+            energyAddedKWh: session?.energyAddedKWh ?? 0,
             maxChargeSpeedKW: nonnegativeDouble(peakSpeedText) ?? 0,
             isDCFast: isDCFast,
             locationType: locationType,
             electricityRatePerKWh: positiveDouble(rateText),
-            actualCost: nonnegativeDouble(actualCostText)
+            actualCost: nonnegativeDouble(actualCostText),
+            manualEnergyKWh: nonnegativeDouble(energyText),
+            tariff: draftTariff
         )
 
         do {

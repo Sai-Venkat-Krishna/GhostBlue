@@ -29,6 +29,14 @@ struct ClimatePresetQuery: EntityQuery {
     }
 }
 
+extension ClimatePresetEntity {
+    init(from preset: ClimatePreset) {
+        self.init(id: preset.id, vehicleVin: preset.vehicle?.vin ?? "",
+                  vehicleName: preset.vehicle?.displayName ?? "", presetName: preset.name,
+                  presetIcon: preset.iconName, isSelected: preset.isSelected)
+    }
+}
+
 @MainActor
 private struct ClimatePresetFetcher {
     static func fetchAllPresets() -> [ClimatePresetEntity] {

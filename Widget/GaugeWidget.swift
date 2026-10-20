@@ -333,7 +333,7 @@ private struct GaugeLargeView: View {
                     .foregroundColor(GhostBlue.dimWhite)
 
                 Button(intent: {
-                    var intent = RefreshVehicleStatusIntent()
+                    let intent = RefreshVehicleStatusIntent()
                     intent.vehicle = vehicle
                     return intent
                 }()) {
@@ -439,6 +439,14 @@ struct GaugeWidgetEntryView: View {
     @Environment(\.widgetFamily) private var family
 
     var body: some View {
+        if AppTheme.persisted == .rivian {
+            RivianGaugeView(entry: entry)
+        } else {
+            classicBody
+        }
+    }
+
+    private var classicBody: some View {
         Group {
             if let vehicle = entry.vehicle {
                 switch family {

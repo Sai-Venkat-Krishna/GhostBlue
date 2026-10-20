@@ -44,7 +44,7 @@ struct HomeVehicleImageView: View {
             }
 
             if isLoading, image == nil {
-                ProgressView()
+                BrandProgressView()
                     .controlSize(.small)
                     .offset(y: 58)
             }

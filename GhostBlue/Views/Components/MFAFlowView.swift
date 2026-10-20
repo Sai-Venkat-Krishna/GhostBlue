@@ -305,7 +305,7 @@ struct MFAVerificationView: View {
                         Text("Resend Code")
                         if state.isResendingCode {
                             Spacer()
-                            ProgressView()
+                            BrandProgressView()
                         }
                     }
                 }
@@ -334,7 +334,7 @@ struct MFAVerificationView: View {
                     state.verify()
                 } label: {
                     if state.isVerifying {
-                        ProgressView()
+                        BrandProgressView()
                     } else {
                         Text("Verify")
                     }

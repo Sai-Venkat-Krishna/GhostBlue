@@ -60,7 +60,7 @@ struct VehicleTimelineProvider: AppIntentTimelineProvider {
         // While plugged in (charging or completed), poll every 10 min so
         // disconnection and charge-complete transitions appear promptly.
         let isPlugged = updatedVehicle?.isCharging == true || updatedVehicle?.isPluggedIn == true
-        let effectiveInterval = isPlugged ? min(refreshInterval, 10 * 60) : refreshInterval
+        let effectiveInterval = VehicleRefreshPolicy.interval(requested: refreshInterval, pluggedIn: isPlugged)
 
         let nextRefreshDate = currentDate.addingTimeInterval(effectiveInterval)
         entries.append(VehicleWidgetEntry(
@@ -151,6 +151,7 @@ struct VehicleTimelineProvider: AppIntentTimelineProvider {
         }
     }
 
+    @MainActor
     private func refreshVehicleData(for configuration: VehicleWidgetIntent) async -> VehicleEntity? {
         do {
             let modelContainer = try createSharedModelContainer(enableCloudKit: false)
@@ -165,13 +166,16 @@ struct VehicleTimelineProvider: AppIntentTimelineProvider {
             // Get the target vehicle
             let targetVehicle: BBVehicle?
             if let configVehicle = configuration.vehicle {
-                let vehicles = try context.fetch(FetchDescriptor<BBVehicle>())
-                targetVehicle = vehicles.first { $0.vin == configVehicle.vin }
+                let vin = configVehicle.vin
+                var descriptor = FetchDescriptor<BBVehicle>(predicate: #Predicate { $0.vin == vin })
+                descriptor.fetchLimit = 1
+                targetVehicle = try context.fetch(descriptor).first
             } else {
-                let descriptor = FetchDescriptor<BBVehicle>(
+                var descriptor = FetchDescriptor<BBVehicle>(
                     predicate: #Predicate { !$0.isHidden },
                     sortBy: [SortDescriptor(\.sortOrder)]
                 )
+                descriptor.fetchLimit = 1
                 let vehicles = try context.fetch(descriptor)
                 targetVehicle = vehicles.first
             }
@@ -186,9 +190,15 @@ struct VehicleTimelineProvider: AppIntentTimelineProvider {
             let vehicleName = bbVehicle.displayName
             let lastUpdated = bbVehicle.lastUpdated ?? Date.distantPast
             let timeSinceLastUpdate = Date().timeIntervalSince(lastUpdated)
-            let thirtyMinutesInSeconds: TimeInterval = 30 * 60
+            let refreshInterval = VehicleRefreshPolicy.interval(
+                requested: AppSettings.shared.widgetRefreshInterval.timeInterval,
+                pluggedIn: bbVehicle.evStatus?.pluggedIn == true || bbVehicle.evStatus?.charging == true
+            )
 
-            if timeSinceLastUpdate < thirtyMinutesInSeconds {
+            if !VehicleRefreshPolicy.shouldRefresh(
+                lastFetch: bbVehicle.lastUpdated,
+                interval: VehicleRefreshPolicy.freshnessWindow(forReloadInterval: refreshInterval)
+            ) {
                 BBLogger.info(.app, "Widget: Using fresh data for \(vehicleName) (updated \(Int(timeSinceLastUpdate / 60))m ago)")
             } else {
                 BBLogger.info(.app, "Widget: Refreshing stale vehicle status for \(vehicleName) (last updated \(Int(timeSinceLastUpdate / 60))m ago)")
@@ -201,7 +211,7 @@ struct VehicleTimelineProvider: AppIntentTimelineProvider {
 
             // Create vehicle entity on the main actor to avoid capture issues
             let unit = await MainActor.run { AppSettings.shared.preferredDistanceUnit }
-            let allPresets = try await ClimatePresetEntity.defaultQuery.suggestedEntities()
+            let allPresets = bbVehicle.safeClimatePresets.map { ClimatePresetEntity(from: $0) }
             var vehicleEntity = VehicleEntity(from: bbVehicle, with: unit, allPresets: allPresets)
             vehicleEntity.cachedImagePath = await fetchAndCacheCarImage(
                 modelName: bbVehicle.model,
@@ -230,6 +240,7 @@ struct VehicleTimelineProvider: AppIntentTimelineProvider {
         }
     }
 
+    @MainActor
     private func getVehicleEntityFromContext(
         for configuration: VehicleWidgetIntent,
         context: ModelContext
@@ -237,13 +248,16 @@ struct VehicleTimelineProvider: AppIntentTimelineProvider {
         do {
             let targetVehicle: BBVehicle?
             if let configVehicle = configuration.vehicle {
-                let vehicles = try context.fetch(FetchDescriptor<BBVehicle>())
-                targetVehicle = vehicles.first { $0.vin == configVehicle.vin }
+                let vin = configVehicle.vin
+                var descriptor = FetchDescriptor<BBVehicle>(predicate: #Predicate { $0.vin == vin })
+                descriptor.fetchLimit = 1
+                targetVehicle = try context.fetch(descriptor).first
             } else {
-                let descriptor = FetchDescriptor<BBVehicle>(
+                var descriptor = FetchDescriptor<BBVehicle>(
                     predicate: #Predicate { !$0.isHidden },
                     sortBy: [SortDescriptor(\.sortOrder)]
                 )
+                descriptor.fetchLimit = 1
                 let vehicles = try context.fetch(descriptor)
                 targetVehicle = vehicles.first
             }
@@ -253,7 +267,7 @@ struct VehicleTimelineProvider: AppIntentTimelineProvider {
             }
 
             let unit = await MainActor.run { AppSettings.shared.preferredDistanceUnit }
-            let allPresets = try await ClimatePresetEntity.defaultQuery.suggestedEntities()
+            let allPresets = bbVehicle.safeClimatePresets.map { ClimatePresetEntity(from: $0) }
             var vehicleEntity = VehicleEntity(from: bbVehicle, with: unit, allPresets: allPresets)
             vehicleEntity.cachedImagePath = await fetchAndCacheCarImage(
                 modelName: bbVehicle.model,

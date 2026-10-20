@@ -5,6 +5,8 @@ import WidgetKit
 
 struct ChargingStatusSummary: View {
     let vehicle: BBVehicle
+    /// Colour for the normal (non-warning) state.
+    var activeTint: Color = .cyan
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { timeline in
@@ -12,7 +14,7 @@ struct ChargingStatusSummary: View {
             VStack(alignment: .leading, spacing: 5) {
                 Label(state.title, systemImage: state == .outdated ? "clock.badge.exclamationmark" : "bolt.circle")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(state == .outdated || state == .confirmingStop ? Color.orange : Color.cyan)
+                    .foregroundStyle(state == .outdated || state == .confirmingStop ? Color.orange : activeTint)
                 if state == .confirmingStop {
                     Text("The last update reported a stop. Waiting for a newer vehicle reading to confirm it.")
                         .font(.caption)
@@ -93,7 +95,7 @@ struct SmartChargingScheduleSection: View {
                 }
                 Button { run() } label: {
                     HStack {
-                        if isRunning { ProgressView() }
+                        if isRunning { BrandProgressView() }
                         Text(isRunning ? "Checking vehicle…" : "Check charging now")
                     }
                 }

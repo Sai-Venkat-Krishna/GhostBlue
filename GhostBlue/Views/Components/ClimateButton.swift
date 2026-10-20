@@ -196,16 +196,9 @@ struct ClimateButton: View {
                     presetIcon: effectivePreset?.iconName
                 )
             } else {
+                // No immediate read: it would wake the car only to see the
+                // old state. waitForStatusChange polls once it has settled.
                 try await account.stopClimate(bbVehicle, modelContext: context)
-                do {
-                    try await account.fetchAndUpdateVehicleStatus(
-                        for: bbVehicle,
-                        modelContext: context,
-                        cached: false
-                    )
-                } catch {
-                    BBLogger.warning(.app, "ClimateButton: Failed to fetch status after stop: \(error)")
-                }
             }
 
             try await bbVehicle.waitForStatusChange(

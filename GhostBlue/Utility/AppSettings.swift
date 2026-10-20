@@ -300,8 +300,14 @@ enum AppTheme: String, CaseIterable, Codable, Identifiable, Sendable {
     case hyundaiBlue
     case aurora
     case minimal
+    case rivian
 
     var id: String { rawValue }
+
+    /// Accent for the Rivian theme. Defined here (not in RivianTheme.swift) so the
+    /// Widget/WatchWidget extensions — which compile AppSettings but not the main-app
+    /// theme files — can resolve it.
+    static let rivianGold = Color(red: 1.0, green: 0.675, blue: 0.0)
 
     var title: String {
         switch self {
@@ -309,6 +315,7 @@ enum AppTheme: String, CaseIterable, Codable, Identifiable, Sendable {
         case .hyundaiBlue: "Hyundai Blue"
         case .aurora: "Aurora"
         case .minimal: "Minimal"
+        case .rivian: "Rivian"
         }
     }
 
@@ -322,6 +329,8 @@ enum AppTheme: String, CaseIterable, Codable, Identifiable, Sendable {
             [Color(red: 0.06, green: 0.12, blue: 0.24), Color(red: 0.06, green: 0.40, blue: 0.35)]
         case .minimal:
             [Color(red: 0.10, green: 0.11, blue: 0.14), Color(red: 0.17, green: 0.18, blue: 0.22)]
+        case .rivian:
+            [Color(red: 0.04, green: 0.04, blue: 0.045), Color(red: 0.11, green: 0.09, blue: 0.055)]
         }
     }
 }
@@ -642,7 +651,7 @@ class AppSettings {
         return hour >= quietHoursStart || hour < quietHoursEnd
     }
 
-    var accentColor: Color { appAccent.color }
+    var accentColor: Color { appTheme == .rivian ? AppTheme.rivianGold : appAccent.color }
     var themeColors: [Color] { appTheme.colors }
 
     private init() {
@@ -932,5 +941,23 @@ class AppSettings {
                 }
             }
         #endif
+    }
+}
+
+extension AppTheme {
+    /// The theme as currently saved, read fresh from shared storage. Widget,
+    /// Live Activity and complication processes can outlive a theme change
+    /// made in the app, so they use this instead of the cached
+    /// `AppSettings.shared.appTheme`.
+    static var persisted: AppTheme {
+        let key = "AppTheme"
+        #if targetEnvironment(simulator)
+            let synced = SimulatorSyncStore().string(forKey: key)
+        #else
+            let synced: String? = nil
+        #endif
+        let raw = synced
+            ?? UserDefaults(suiteName: "group.com.saivenkatkrishna.ghostblue.shared")?.string(forKey: key)
+        return raw.flatMap(AppTheme.init(rawValue:)) ?? .midnight
     }
 }

@@ -21,6 +21,17 @@ struct TripsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \TripRecord.startDate, order: .reverse)
     private var archivedTripRecords: [TripRecord]
+
+    init(displayedVehicles: [BBVehicle], selectedVehicleIndex: Binding<Int>) {
+        self.displayedVehicles = displayedVehicles
+        _selectedVehicleIndex = selectedVehicleIndex
+        let index = selectedVehicleIndex.wrappedValue
+        let vin = displayedVehicles.indices.contains(index) ? displayedVehicles[index].vin : ""
+        _archivedTripRecords = Query(filter: #Predicate<TripRecord> { $0.vin == vin },
+                                     sort: \TripRecord.startDate, order: .reverse)
+    }
+
+    @State private var recordsByKey: [String: TripRecord] = [:]
     @State private var appSettings = AppSettings.shared
     @State private var trips: [EVTripDetail] = []
     @State private var isLoading = false
@@ -79,10 +90,12 @@ struct TripsView: View {
     }
 
     private var savedTrips: [EVTripDetail] {
+        let records = recordsByKey
+        let vin = bbVehicle?.vin ?? ""
+        let query = tripSearchText.localizedLowercase
         let searched = filteredTrips.filter { trip in
             guard !tripSearchText.isEmpty else { return true }
-            let query = tripSearchText.localizedLowercase
-            let record = archivedRecord(for: trip)
+            let record = records[TripRecord.key(vin: vin, trip: trip)]
             return [
                 record?.customName,
                 record?.startLocationName,
@@ -94,8 +107,8 @@ struct TripsView: View {
         }
 
         return searched.sorted { lhs, rhs in
-            let lhsFavorite = archivedRecord(for: lhs)?.isFavorite == true
-            let rhsFavorite = archivedRecord(for: rhs)?.isFavorite == true
+            let lhsFavorite = records[TripRecord.key(vin: vin, trip: lhs)]?.isFavorite == true
+            let rhsFavorite = records[TripRecord.key(vin: vin, trip: rhs)]?.isFavorite == true
             if lhsFavorite != rhsFavorite {
                 return lhsFavorite && !rhsFavorite
             }
@@ -165,7 +178,8 @@ struct TripsView: View {
                 }
             }
         }
-        .environment(\.colorScheme, .dark)
+        .ghostBlueColorScheme()
+        .rivianStatusBarBackdrop()
         .tint(appSettings.accentColor)
         .sensoryFeedback(.selection, trigger: comparedTripIDs.count)
         .sheet(isPresented: $showingCostSettings) {
@@ -410,6 +424,7 @@ struct TripsView: View {
             }
             .task(id: bbVehicle.vin) {
                 contentVisible = false
+                rebuildTripIndex()
                 trips = archivedTrips(for: bbVehicle)
                 expandedTripId = nil
                 comparisonMode = false
@@ -428,6 +443,12 @@ struct TripsView: View {
                 withAnimation {
                     showEfficiencyTrend = enabled
                     showEnergyUsage = enabled
+                }
+            }
+            .onChange(of: archivedTripRecords.map(\.persistentModelID)) {
+                rebuildTripIndex()
+                trips = archivedTrips(for: bbVehicle).filter {
+                    TripRecord.key(vin: bbVehicle.vin, trip: $0) != pendingDeletedRecord?.tripKey
                 }
             }
             .onChange(of: selectedFilter) { _, _ in
@@ -539,7 +560,7 @@ struct TripsView: View {
             .accessibilityLabel("Trip display and export options")
 
             if isLoading, !trips.isEmpty {
-                ProgressView()
+                BrandProgressView()
             }
         }
         .padding(.top, 8)
@@ -1393,7 +1414,7 @@ struct TripsView: View {
     private var loadingCard: some View {
         VStack(spacing: 12) {
             HStack {
-                ProgressView()
+                BrandProgressView()
                 Text("Loading saved trips…")
                     .font(.subheadline.weight(.semibold))
                 Spacer()
@@ -1485,7 +1506,12 @@ struct TripsView: View {
     private func archivedRecord(for trip: EVTripDetail) -> TripRecord? {
         guard let bbVehicle else { return nil }
         let key = TripRecord.key(vin: bbVehicle.vin, trip: trip)
-        return archivedTripRecords.first { $0.tripKey == key }
+        return recordsByKey[key]
+    }
+
+    private func rebuildTripIndex() {
+        recordsByKey = Dictionary(archivedTripRecords.map { ($0.tripKey, $0) },
+                                  uniquingKeysWith: { first, _ in first })
     }
 
     private func beginRenaming(_ record: TripRecord?) {
@@ -1589,8 +1615,8 @@ struct TripsView: View {
         }
 
         do {
-            if let fetched = try await account.fetchEVTripDetails(for: bbVehicle, modelContext: modelContext) {
-                bbVehicle.archiveTrips(fetched)
+            if try await account.fetchEVTripDetails(for: bbVehicle, modelContext: modelContext) != nil {
+                rebuildTripIndex()
                 withAnimation(.spring(response: 0.42, dampingFraction: 0.88)) {
                     trips = archivedTrips(for: bbVehicle)
                 }
@@ -2285,7 +2311,7 @@ private struct TripComparisonView: View {
                 }
                 .scrollIndicators(.hidden)
             }
-            .environment(\.colorScheme, .dark)
+            .ghostBlueColorScheme()
             .navigationTitle("Compare Trips")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -127,7 +127,7 @@ struct ChargeLimitSettingsContent: View {
                     HStack {
                         Spacer()
                         if isSaving {
-                            ProgressView()
+                            BrandProgressView()
                                 .progressViewStyle(.circular)
                             if let statusMessage {
                                 Text(statusMessage)

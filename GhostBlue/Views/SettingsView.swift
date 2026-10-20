@@ -44,17 +44,19 @@ struct SettingsView: View {
                     ForEach(accounts) { account in
                         NavigationLink(destination: AccountInfoView(
                             account: account,
-                        )) {
-                            HStack {
-                                VStack(alignment: .leading) {
-                                    Text(account.username)
-                                        .font(.headline)
-                                    Text(account.brandEnum.displayName)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
+                        ).rivianListBackground()) {
+                            RivianRowIcon(systemImage: "person.crop.circle.fill", tint: RV.vehicleCenter) {
+                                HStack {
+                                    VStack(alignment: .leading) {
+                                        Text(account.username)
+                                            .font(.headline)
+                                        Text(account.brandEnum.displayName)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
 
-                                Spacer()
+                                    Spacer()
+                                }
                             }
                         }
                     }
@@ -67,15 +69,17 @@ struct SettingsView: View {
                             AddAccountView()
                         }
                         .font(.caption)
-                        .foregroundColor(.blue)
+                        .foregroundColor(appSettings.appTheme == .rivian ? RV.accent : .blue)
                     }
                 }
 
                 Section {
-                    Picker("Background Refresh", selection: $appSettings.appRefreshInterval) {
+                    Picker(selection: $appSettings.appRefreshInterval) {
                         ForEach(AppRefreshInterval.allCases, id: \.rawValue) { interval in
                             Text(interval.displayName).tag(interval)
                         }
+                    } label: {
+                        SettingsRowLabel(title: "Background Refresh", systemImage: "arrow.clockwise", tint: RV.climate)
                     }
                 } header: {
                     Text("App Settings")
@@ -86,22 +90,38 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Picker("Theme", selection: $appSettings.appTheme) {
+                    Picker(selection: $appSettings.appTheme) {
                         ForEach(AppTheme.allCases) { theme in
                             Text(theme.title).tag(theme)
                         }
+                    } label: {
+                        SettingsRowLabel(title: "Theme", systemImage: "paintpalette.fill", tint: RV.accent)
                     }
 
-                    Picker("Accent", selection: $appSettings.appAccent) {
-                        ForEach(AppAccent.allCases) { accent in
-                            Label(accent.title, systemImage: "circle.fill")
-                                .foregroundStyle(accent.color)
-                                .tag(accent)
+                    if appSettings.appTheme == .rivian {
+                        HStack(spacing: 8) {
+                            SettingsIconChip(systemImage: "drop.fill", tint: RV.accent)
+                                .padding(.trailing, 4)
+                            Text("Accent")
+                            Spacer()
+                            Image(systemName: "circle.fill")
+                                .foregroundStyle(AppTheme.rivianGold)
+                            Text("Rivian Gold")
+                                .foregroundStyle(.secondary)
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityHint("Set by the Rivian theme")
+                    } else {
+                        Picker("Accent", selection: $appSettings.appAccent) {
+                            ForEach(AppAccent.allCases) { accent in
+                                Label(accent.title, systemImage: "circle.fill")
+                                    .foregroundStyle(accent.color)
+                                    .tag(accent)
+                            }
                         }
                     }
 
                     Picker(
-                        "Dashboard Preset",
                         selection: Binding(
                             get: { appSettings.homeDashboardPreset },
                             set: { appSettings.applyDashboardPreset($0) }
@@ -110,24 +130,31 @@ struct SettingsView: View {
                         ForEach(HomeDashboardPreset.allCases) { preset in
                             Text(preset.title).tag(preset)
                         }
+                    } label: {
+                        SettingsRowLabel(title: "Dashboard Preset", systemImage: "rectangle.3.group.fill", tint: RV.location)
                     }
 
-                    Picker("Vehicle Size", selection: $appSettings.vehicleHeroSize) {
+                    Picker(selection: $appSettings.vehicleHeroSize) {
                         ForEach(VehicleHeroSize.allCases) { size in
                             Text(size.title).tag(size)
                         }
+                    } label: {
+                        SettingsRowLabel(title: "Vehicle Size", systemImage: "arrow.up.left.and.arrow.down.right", tint: RV.location)
                     }
 
-                    Picker("Vehicle Position", selection: $appSettings.vehicleHeroAlignment) {
+                    Picker(selection: $appSettings.vehicleHeroAlignment) {
                         ForEach(VehicleHeroAlignment.allCases) { alignment in
                             Text(alignment.title).tag(alignment)
                         }
+                    } label: {
+                        SettingsRowLabel(title: "Vehicle Position", systemImage: "align.horizontal.center.fill", tint: RV.location)
                     }
 
                     NavigationLink {
                         HomeLayoutEditorView(order: $appSettings.homeSectionOrder)
+                            .rivianListBackground()
                     } label: {
-                        Label("Home Layout", systemImage: "square.grid.2x2")
+                        SettingsRowLabel(title: "Home Layout", systemImage: "square.grid.2x2", tint: RV.location, classicShowsIcon: true)
                     }
                 } header: {
                     Text("Appearance")
@@ -138,13 +165,18 @@ struct SettingsView: View {
                 ABRPSettingsSection()
 
                 Section {
-                    Picker("Widget Refresh Interval", selection: $appSettings.widgetRefreshInterval) {
+                    Picker(selection: $appSettings.widgetRefreshInterval) {
                         ForEach(WidgetRefreshInterval.allCases, id: \.rawValue) { interval in
                             Text(interval.displayName).tag(interval)
                         }
+                    } label: {
+                        SettingsRowLabel(title: "Widget Refresh Interval", systemImage: "timer", tint: RV.climate)
                     }
-                    Toggle("Widget Notifications", isOn: $appSettings.notificationsEnabled)
+                    Toggle(isOn: $appSettings.notificationsEnabled) {
+                        SettingsRowLabel(title: "Widget Notifications", systemImage: "bell.badge.fill", tint: RV.danger)
+                    }
                     Toggle(isOn: $appSettings.liveActivitiesEnabled) {
+                        RivianRowIcon(systemImage: "dot.radiowaves.left.and.right", tint: RV.energy) {
                         HStack(spacing: 6) {
                             Text("Live Activities")
                             Button {
@@ -155,11 +187,12 @@ struct SettingsView: View {
                                     .fontWeight(.bold)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
-                                    .background(Color.blue)
+                                    .background(appSettings.appTheme == .rivian ? RV.accent : Color.blue)
                                     .foregroundColor(.white)
                                     .clipShape(Capsule())
                             }
                             .buttonStyle(.plain)
+                        }
                         }
                     }
                 } header: {
@@ -167,42 +200,59 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Picker("Distance Unit", selection: $appSettings.preferredDistanceUnit) {
+                    Picker(selection: $appSettings.preferredDistanceUnit) {
                         ForEach(Distance.Units.allCases) { unit in
                             Text(unit.displayName).tag(unit)
                         }
+                    } label: {
+                        SettingsRowLabel(title: "Distance Unit", systemImage: "ruler.fill", tint: RV.service)
                     }
 
-                    Picker("Temperature Unit", selection: $appSettings.preferredTemperatureUnit) {
+                    Picker(selection: $appSettings.preferredTemperatureUnit) {
                         ForEach(Temperature.Units.allCases) { unit in
                             Text(unit.displayName).tag(unit)
                         }
+                    } label: {
+                        SettingsRowLabel(title: "Temperature Unit", systemImage: "thermometer.medium", tint: RV.service)
                     }
                 } header: {
                     Text("Units")
                 }
 
                 Section {
-                    Toggle("Debug Mode", isOn: $appSettings.debugModeEnabled)
+                    Toggle(isOn: $appSettings.debugModeEnabled) {
+                        SettingsRowLabel(title: "Debug Mode", systemImage: "ladybug.fill", tint: RV.vehicleCenter)
+                    }
 
                     if appSettings.debugModeEnabled {
                         #if DEBUG
-                            NavigationLink("Map Centering Debug") {
+                            NavigationLink {
                                 MapCenteringDebugView()
+                                    .rivianListBackground()
+                            } label: {
+                                SettingsRowLabel(title: "Map Centering Debug", systemImage: "map.fill", tint: RV.vehicleCenter)
                             }
                         #endif
 
-                        NavigationLink("HTTP Logs") {
+                        NavigationLink {
                             HTTPLogView()
+                                .rivianListBackground()
+                        } label: {
+                            SettingsRowLabel(title: "HTTP Logs", systemImage: "list.bullet.rectangle.fill", tint: RV.vehicleCenter)
                         }
 
-                        NavigationLink("Sync Diagnostics") {
+                        NavigationLink {
                             DiagnosticInfoView()
+                                .rivianListBackground()
+                        } label: {
+                            SettingsRowLabel(title: "Sync Diagnostics", systemImage: "arrow.triangle.2.circlepath", tint: RV.vehicleCenter)
                         }
                     }
 
-                    Button("Clear All Data") {
+                    Button {
                         showingClearDataAlert = true
+                    } label: {
+                        SettingsRowLabel(title: "Clear All Data", systemImage: "trash.fill", tint: RV.danger)
                     }
                     .foregroundColor(.red)
 
@@ -212,8 +262,10 @@ struct SettingsView: View {
                             .foregroundColor(result.contains("Error") ? .red : .green)
                     }
 
-                    Button("Export Debug Data") {
+                    Button {
                         showingExportSheet = true
+                    } label: {
+                        SettingsRowLabel(title: "Export Debug Data", systemImage: "square.and.arrow.up.fill", tint: RV.vehicleCenter)
                     }
                 } header: {
                     Text("Debug Settings")
@@ -222,20 +274,23 @@ struct SettingsView: View {
                 Section {
                     NavigationLink {
                         PrivacySecurityView()
+                            .rivianListBackground()
                     } label: {
-                        Label("Privacy & Security", systemImage: "lock.shield.fill")
+                        SettingsRowLabel(title: "Privacy & Security", systemImage: "lock.shield.fill", tint: RV.climate, classicShowsIcon: true)
                     }
 
                     NavigationLink {
                         OwnershipSetupView(vehicles: displayedVehicles)
+                            .rivianListBackground()
                     } label: {
-                        Label("Setup Guide", systemImage: "checklist.checked")
+                        SettingsRowLabel(title: "Setup Guide", systemImage: "checklist.checked", tint: RV.energy, classicShowsIcon: true)
                     }
 
                     NavigationLink {
                         BackupRestoreView()
+                            .rivianListBackground()
                     } label: {
-                        Label("Backup & Restore", systemImage: "externaldrive.badge.timemachine")
+                        SettingsRowLabel(title: "Backup & Restore", systemImage: "externaldrive.badge.timemachine", tint: RV.energy, classicShowsIcon: true)
                     }
 
                 } header: {
@@ -245,8 +300,8 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    NavigationLink(destination: TroubleshootingView()) {
-                        Label("Troubleshooting", systemImage: "questionmark.circle")
+                    NavigationLink(destination: TroubleshootingView().rivianListBackground()) {
+                        SettingsRowLabel(title: "Troubleshooting", systemImage: "questionmark.circle", tint: RV.climate, classicShowsIcon: true)
                     }
                 } header: {
                     Text("Help")
@@ -256,23 +311,23 @@ struct SettingsView: View {
                 Section {
                     if let version = Bundle.main.releaseVersionNumber, let build = Bundle.main.buildVersionNumber {
                         HStack {
-                            Label("Version Number", systemImage: "calendar")
+                            SettingsRowLabel(title: "Version Number", systemImage: "calendar", tint: RV.vehicleCenter, classicShowsIcon: true)
                             Spacer()
                             Text(version)
                         }
                         HStack {
-                            Label("Build Number", systemImage: "swift")
+                            SettingsRowLabel(title: "Build Number", systemImage: "swift", tint: RV.service, classicShowsIcon: true)
                             Spacer()
                             Text(build)
                         }
                     }
 
                     Link(destination: URL(string: "https://github.com/schmidtwmark/GhostBlue")!) {
-                        Label("App Source Code", systemImage: "location.app")
+                        SettingsRowLabel(title: "App Source Code", systemImage: "location.app", tint: RV.vehicleCenter, classicShowsIcon: true)
                     }
 
                     Link(destination: URL(string: "https://github.com/schmidtwmark/BetterBlueKit")!) {
-                        Label("Client Source Code", systemImage: "apple.terminal")
+                        SettingsRowLabel(title: "Client Source Code", systemImage: "apple.terminal", tint: RV.vehicleCenter, classicShowsIcon: true)
                     }
                 } header: {
                     Text("About")
@@ -280,7 +335,7 @@ struct SettingsView: View {
 
                 Section {
                     Link(destination: URL(string: "https://apps.apple.com/qa/developer/mark-schmidt/id1502505700")!) {
-                        Label("My Other Apps", systemImage: "storefront")
+                        SettingsRowLabel(title: "My Other Apps", systemImage: "storefront", tint: RV.climate, classicShowsIcon: true)
                     }
                 } header: {
                     Text("Shameless Self Promotion")
@@ -294,6 +349,10 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .scrollContentBackground(appSettings.appTheme == .rivian ? .hidden : .automatic)
+            .background {
+                if appSettings.appTheme == .rivian { RVBackground() }
+            }
             .tint(appSettings.accentColor)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -303,6 +362,7 @@ struct SettingsView: View {
                 }
             }
         }
+        .rivianScreen()
         .alert("Clear All Data", isPresented: $showingClearDataAlert) {
             Button("Cancel", role: .cancel) {}
             Button("Clear All", role: .destructive) {
@@ -349,6 +409,8 @@ struct SettingsView: View {
                     try modelContext.delete(model: VehicleAutomation.self)
 
             try modelContext.save()
+            // Deleted rules must not leave their daily reminders behind.
+            Task { await AutomationReminderScheduler.sync(in: modelContext) }
 
             clearDataResult = "✅ All data cleared successfully"
             BBLogger.info(.app, "SettingsView: Successfully cleared all SwiftData storage")
@@ -401,7 +463,7 @@ private struct DebugExportSheet: View {
             Group {
                 if exportData == nil {
                     VStack(spacing: 16) {
-                        ProgressView()
+                        BrandProgressView()
                             .scaleEffect(1.5)
                         Text("Generating export...")
                             .foregroundColor(.secondary)

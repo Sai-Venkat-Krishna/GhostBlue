@@ -66,7 +66,7 @@ private struct SpecTopBar: View {
             Spacer(minLength: 4)
 
             Button(intent: {
-                var i = RefreshVehicleStatusIntent()
+                let i = RefreshVehicleStatusIntent()
                 i.vehicle = vehicle
                 return i
             }()) {
@@ -502,6 +502,11 @@ private struct SpecStatusRow: View {
                 Text("Charge Complete")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.white.opacity(0.85))
+            } else if vehicle.isPluggedIn {
+                // Parked cars keep the lock state; the age is shown beside it.
+                Text(vehicle.chargingState.title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
             } else {
                 Image(systemName: lockIcon)
                     .font(.system(size: 13, weight: .semibold))
@@ -513,7 +518,7 @@ private struct SpecStatusRow: View {
 
             Spacer(minLength: 4)
 
-            (Text(vehicle.timestamp, style: .relative) + Text(" ago"))
+            Text("\(vehicle.timestamp, style: .relative) ago")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(.white.opacity(0.45))
                 .lineLimit(1)
@@ -660,6 +665,14 @@ private struct SpecWidgetEntryView: View {
     private var accent: Color { entry.configuration.accentColor.color }
 
     var body: some View {
+        if AppTheme.persisted == .rivian {
+            RivianSpecView(entry: entry, woven: heroStyle == .woven)
+        } else {
+            classicBody
+        }
+    }
+
+    private var classicBody: some View {
         Group {
             if let vehicle = entry.vehicle {
                 SpecLargeLayout(vehicle: vehicle, accent: accent, heroStyle: heroStyle)

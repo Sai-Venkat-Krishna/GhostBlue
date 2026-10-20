@@ -199,7 +199,7 @@ struct VehicleTitleView: View {
         } label: {
             Group {
                 if isRefreshing {
-                    ProgressView()
+                    BrandProgressView()
                         .scaleEffect(0.8)
                 } else if showRefreshSuccess {
                     Image(systemName: "checkmark")

@@ -11,6 +11,15 @@ enum VehicleRefreshPolicy {
         return now.timeIntervalSince(lastFetch) >= interval
     }
 
+    /// How old data may be and still skip a fetch when a timeline reloads
+    /// every `reloadInterval`. It must be shorter than the interval: the
+    /// fetch time is stamped after the network call, so an on-time reload
+    /// sees data slightly younger than the interval and would otherwise skip,
+    /// leaving widgets nearly two intervals stale.
+    static func freshnessWindow(forReloadInterval reloadInterval: TimeInterval) -> TimeInterval {
+        min(reloadInterval * 0.75, 30 * 60)
+    }
+
     /// Cancellation must end the loop; swallowing a cancelled sleep creates a busy loop.
     @MainActor
     static func run(
@@ -216,7 +225,7 @@ enum ChargingCSVExporter {
                 session.isActive ? "In progress" : "Completed",
                 String(session.startPercentage), String(session.endPercentage),
                 String(vehicle.energyDelivered(for: session)),
-                session.energySource(batteryCapacityKWh: vehicle.batteryCapacityKWh),
+                vehicle.energySource(for: session),
                 vehicle.chargingCost(for: session).map { String($0) } ?? "",
                 session.actualCost == nil ? "Estimated" : "Receipt",
                 session.locationType.title,

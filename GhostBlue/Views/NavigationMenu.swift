@@ -125,7 +125,13 @@ enum NavigationHelper {
         to coordinate: CLLocationCoordinate2D,
         destinationName: String? = nil,
     ) {
-        let item = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
+        let item = MKMapItem(
+            location: CLLocation(
+                latitude: coordinate.latitude,
+                longitude: coordinate.longitude
+            ),
+            address: nil
+        )
         item.name = destinationName
         BBLogger.info(.app, "NavigationHelper: Opening Apple Maps directions to " +
             "\(destinationName ?? "\(coordinate.latitude), \(coordinate.longitude)")")

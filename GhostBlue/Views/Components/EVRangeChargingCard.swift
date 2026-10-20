@@ -166,7 +166,7 @@ struct EVRangeChargingCard: View {
             // Bottom row: Status messages
             HStack {
                 if let inProgressAction {
-                    ProgressView()
+                    BrandProgressView()
                         .scaleEffect(0.8)
                     Text("\(inProgressAction.inProgressLabel)\(animatedDots)")
                         .font(.caption)
@@ -388,18 +388,9 @@ struct EVRangeChargingCard: View {
         if shouldStart {
             try await account.startCharge(bbVehicle, modelContext: context)
         } else {
+            // No immediate read: it would wake the car only to see the old
+            // state. The first poll below updates the Live Activity.
             try await account.stopCharge(bbVehicle, modelContext: context)
-
-            // Immediately fetch status to update Live Activity
-            do {
-                try await account.fetchAndUpdateVehicleStatus(
-                    for: bbVehicle,
-                    modelContext: context,
-                    cached: false
-                )
-            } catch {
-                BBLogger.warning(.app, "EVRangeChargingCard: Failed to fetch status after stop command: \(error)")
-            }
         }
 
         try await bbVehicle.waitForStatusChange(

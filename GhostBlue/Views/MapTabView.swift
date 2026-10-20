@@ -205,9 +205,10 @@ struct MapTabView: View {
                     }
                     .padding(30)
                 }
-                .environment(\.colorScheme, .dark)
+                .ghostBlueColorScheme()
             }
         }
+        .ghostBlueColorScheme(classic: nil)
     }
 
     // MARK: - Footer Card
@@ -241,7 +242,12 @@ struct MapTabView: View {
 
             Spacer()
 
-            if bbVehicle.fuelType.hasElectricCapability, bbVehicle.evStatus != nil {
+            if AppSettings.shared.appTheme == .rivian {
+                rivianFooterButtons(for: bbVehicle)
+            }
+
+            if AppSettings.shared.appTheme != .rivian,
+               bbVehicle.fuelType.hasElectricCapability, bbVehicle.evStatus != nil {
                 Button {
                     showingRoutePlanner = true
                 } label: {
@@ -257,7 +263,7 @@ struct MapTabView: View {
                 .accessibilityLabel("Plan Trip")
             }
 
-            if let coordinate = bbVehicle.coordinate {
+            if AppSettings.shared.appTheme != .rivian, let coordinate = bbVehicle.coordinate {
                 Menu {
                     NavigationMenuContent(
                         coordinate: coordinate,
@@ -280,6 +286,42 @@ struct MapTabView: View {
         .gbGlassCard(radius: GBDesign.cardRadius)
         .padding(.horizontal, GBDesign.screenPadding)
         .padding(.bottom, 8)
+    }
+
+    /// Rivian theme: compact circular Plan Trip and Navigate buttons (Navigate in
+    /// solid ink, like the dashboard commands) so the name and status fit.
+    @ViewBuilder
+    private func rivianFooterButtons(for bbVehicle: BBVehicle) -> some View {
+        if bbVehicle.fuelType.hasElectricCapability, bbVehicle.evStatus != nil {
+            Button {
+                showingRoutePlanner = true
+            } label: {
+                Image(systemName: "bolt.car.fill")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(RV.commandInactiveIcon)
+                    .frame(width: 46, height: 46)
+                    .background(Circle().fill(RV.commandInactiveFill))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Plan Trip")
+        }
+
+        if let coordinate = bbVehicle.coordinate {
+            Menu {
+                NavigationMenuContent(
+                    coordinate: coordinate,
+                    destinationName: bbVehicle.displayName
+                )
+            } label: {
+                Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(RV.commandActiveIcon)
+                    .frame(width: 46, height: 46)
+                    .background(Circle().fill(RV.commandActiveFill))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Navigate")
+        }
     }
 
     @ViewBuilder

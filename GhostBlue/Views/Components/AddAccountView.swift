@@ -113,6 +113,7 @@ struct AddAccountView: View {
             }
         }
         .navigationTitle("Add Account")
+        .rivianScreen()
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button("Add") {

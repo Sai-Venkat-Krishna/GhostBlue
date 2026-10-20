@@ -45,6 +45,8 @@ class BBAccount {
     private var modelContextForMFA: ModelContext?
     @Transient
     private var pendingMFAError: APIError?
+    @Transient private var tripArchiveTasks: [String: Task<Void, Never>] = [:]
+    @Transient private var reconciliationTasks: [String: Task<SmartChargingReconciliation, Error>] = [:]
 
     /// Auth token with automatic persistence. Reads from cache first, then deserializes from storage.
     /// When set, automatically serializes to storage.
@@ -257,9 +259,29 @@ extension BBAccount {
     }
 
     /// Determines if an error should trigger a full re-authentication.
-    /// All API errors except MFA-related ones should invalidate the session.
     private func shouldReauthenticate(for error: APIError) -> Bool {
-        error.errorType != .requiresMFA
+        Self.shouldReauthenticate(for: error)
+    }
+
+    /// Whether an error means the session itself is bad. Transient failures
+    /// (the car's modem not answering a real-time read, rate limits, no
+    /// network) keep the token: wiping it forced a new login in the app,
+    /// widgets and watch, and the immediate retry of a real-time read woke
+    /// the car a second time. Unrecognised failures still re-authenticate,
+    /// so an unexpected session error cannot leave the app stuck.
+    nonisolated static func shouldReauthenticate(for error: APIError) -> Bool {
+        switch error.errorType {
+        case .invalidCredentials, .invalidVehicleSession:
+            return true
+        case .requiresMFA, .serverError, .concurrentRequest, .invalidPin,
+             .regionNotSupported, .failedRetryLogin, .kiaInvalidRequest:
+            return false
+        case .general:
+            guard let code = error.code else { return true }
+            // Negative codes are URLError transport failures (offline,
+            // timeout); 429 and 5xx are the server's problem, not the token's.
+            return code > 0 && code != 429 && code < 500
+        }
     }
 
     @MainActor
@@ -351,8 +373,18 @@ extension BBAccount {
 
             status = try await api.fetchVehicleStatus(for: vehicle, authToken: authToken, cached: cached)
         }
-        LiveActivityManager.shared.updateActivity(for: bbVehicle, status: status, modelContext: modelContext)
-        return status
+        try Task.checkCancellation()
+        let accepted = bbVehicle.updateStatus(with: status)
+        do {
+            try modelContext.save()
+        } catch {
+            // The status is applied in memory and saved with the next write;
+            // a store conflict (e.g. with a widget process) must not turn a
+            // successful fetch into an error and a retry.
+            BBLogger.error(.app, "BBAccount: Failed to save fetched status for \(bbVehicle.vin): \(error)")
+        }
+        LiveActivityManager.shared.updateActivity(for: bbVehicle, status: accepted, modelContext: modelContext)
+        return accepted
     }
 
     @MainActor
@@ -361,9 +393,30 @@ extension BBAccount {
         modelContext: ModelContext,
         cached: Bool = true
     ) async throws {
-        let status = try await fetchVehicleStatus(for: vehicle, modelContext: modelContext, cached: cached)
-        vehicle.updateStatus(with: status)
-        await syncTripArchiveIfNeeded(for: vehicle, modelContext: modelContext)
+        _ = try await fetchVehicleStatus(for: vehicle, modelContext: modelContext, cached: cached)
+        scheduleTripArchiveSync(for: vehicle, modelContext: modelContext)
+    }
+
+    @MainActor
+    private func scheduleTripArchiveSync(for vehicle: BBVehicle, modelContext: ModelContext) {
+        // Extensions should return their timelines promptly. Trip history is
+        // maintained by the app using a context owned by the archive task.
+        guard supportsEVTripDetails, Bundle.main.bundleURL.pathExtension != "appex",
+              tripArchiveTasks[vehicle.vin] == nil,
+              VehicleRefreshPolicy.shouldRefresh(lastFetch: vehicle.lastTripArchiveAttemptDate, interval: 300)
+        else { return }
+        let vin = vehicle.vin
+        let container = modelContext.container
+        tripArchiveTasks[vin] = Task { @MainActor [weak self] in
+            defer { self?.tripArchiveTasks.removeValue(forKey: vin) }
+            guard self != nil, !Task.isCancelled else { return }
+            let context = ModelContext(container)
+            var descriptor = FetchDescriptor<BBVehicle>(predicate: #Predicate { $0.vin == vin })
+            descriptor.fetchLimit = 1
+            guard let storedVehicle = try? context.fetch(descriptor).first,
+                  let account = storedVehicle.account else { return }
+            await account.syncTripArchiveIfNeeded(for: storedVehicle, modelContext: context)
+        }
     }
 
     @MainActor
@@ -460,6 +513,28 @@ extension BBAccount {
         modelContext: ModelContext,
         refreshStatus: Bool = true
     ) async throws -> SmartChargingReconciliation {
+        if let task = reconciliationTasks[vehicle.vin] { return try await task.value }
+        let vin = vehicle.vin
+        let task = Task { @MainActor in
+            try await self.performSmartChargingReconciliation(
+                for: vehicle, at: date, modelContext: modelContext, refreshStatus: refreshStatus
+            )
+        }
+        reconciliationTasks[vin] = task
+        defer { reconciliationTasks.removeValue(forKey: vin) }
+        return try await task.value
+    }
+
+    @MainActor
+    private func performSmartChargingReconciliation(
+        for vehicle: BBVehicle,
+        at date: Date,
+        modelContext: ModelContext,
+        refreshStatus: Bool
+    ) async throws -> SmartChargingReconciliation {
+        if vehicle.activeChargingOverride(at: date) == nil {
+            vehicle.setChargingOverride(nil)
+        }
         guard vehicle.smartChargingEnabled else {
             return recordSmartCharging(
                 .init(action: .skipped, message: "Smart charging is disabled."),
@@ -536,19 +611,20 @@ extension BBAccount {
             )
         }
 
-        let preference = SDGESmartChargingSchedule.preference(at: date)
+        let preference = vehicle.chargingPreference(at: date)
         let batteryPercentage = Int(evStatus.evRange.percentage.rounded(.down))
         let targetSOC = min(100, max(50, vehicle.smartChargingTargetSOC))
 
         let shouldCharge = preference == .charge && batteryPercentage < targetSOC
         if shouldCharge == evStatus.charging {
+            vehicle.smartChargingLastConfirmedAt = date
             let detail: String
             if shouldCharge {
-                detail = "Charging is already running during super off-peak hours."
+                detail = "Charging is already running as requested."
             } else if preference == .charge {
                 detail = "Battery is already at the \(targetSOC)% target."
             } else {
-                detail = "Charging is already paused outside super off-peak hours."
+                detail = "Charging is already paused as requested."
             }
             return recordSmartCharging(
                 .init(action: .alreadyCorrect, message: detail),
@@ -587,12 +663,13 @@ extension BBAccount {
             throw error
         }
 
+        vehicle.smartChargingLastConfirmedAt = date
         return recordSmartCharging(
             .init(
                 action: shouldCharge ? .started : .stopped,
                 message: shouldCharge
-                    ? "Charging started for the SDG&E super off-peak window."
-                    : "Charging paused outside the SDG&E super off-peak window."
+                    ? "Charging started and confirmed."
+                    : "Charging paused and confirmed."
             ),
             for: vehicle,
             modelContext: modelContext,
@@ -772,11 +849,17 @@ extension BBAccount {
     @MainActor
     func startCharge(_ vehicle: BBVehicle, modelContext: ModelContext) async throws {
         try await sendCommand(for: vehicle, command: .startCharge, modelContext: modelContext)
+        vehicle.chargeStopRequestedAt = nil
+        try? modelContext.save()
     }
 
     @MainActor
     func stopCharge(_ vehicle: BBVehicle, modelContext: ModelContext) async throws {
         try await sendCommand(for: vehicle, command: .stopCharge, modelContext: modelContext)
+        // The verification poll that follows expects "not charging"; mark the
+        // request so the stop debounce does not demand a second sample.
+        vehicle.chargeStopRequestedAt = Date()
+        try? modelContext.save()
     }
 
     @MainActor

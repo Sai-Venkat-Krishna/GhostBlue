@@ -20,6 +20,7 @@ struct HomeView: View {
     let displayedVehicles: [BBVehicle]
     @Binding var selectedVehicleIndex: Int
     var onOpenLocation: () -> Void = {}
+    var onOpenCharging: () -> Void = {}
     var onSuccessfulRefresh: (() -> Void)?
 
     @Environment(\.modelContext) private var modelContext
@@ -60,11 +61,30 @@ struct HomeView: View {
 
             if let bbVehicle {
                 PersistentModelGuard(model: bbVehicle) {
-                    content(for: bbVehicle)
+                    if appSettings.appTheme == .rivian {
+                        RivianDashboard(
+                            bbVehicle: bbVehicle,
+                            transition: transition,
+                            vehicleOptions: displayedVehicles,
+                            onSelectVehicle: { selectedVehicleIndex = $0 },
+                            errorMessage: errorMessage,
+                            onTapError: handleErrorBannerTap,
+                            onOpenSettings: { showingSettings = true },
+                            onOpenLocation: onOpenLocation,
+                            onOpenCharging: onOpenCharging,
+                            onOpenVehicleCenter: { showingOwnershipHub = true }
+                        )
+                        // Same refresh lifecycle as the classic dashboard.
+                        .refreshable { await performRefresh(forced: true) }
+                        .task(id: bbVehicle.vin) { await performRefresh(forced: false) }
+                        .onDisappear { refreshTask?.cancel() }
+                    } else {
+                        content(for: bbVehicle)
+                    }
                 }
             }
         }
-        .environment(\.colorScheme, .dark)
+        .ghostBlueColorScheme()
         .tint(appSettings.accentColor)
         .sheet(isPresented: $showingSettings) {
             SettingsView()
@@ -270,7 +290,7 @@ struct HomeView: View {
         } label: {
             Group {
                 if isRefreshing {
-                    ProgressView()
+                    BrandProgressView()
                         .scaleEffect(0.8)
                 } else if showRefreshSuccess {
                     Image(systemName: "checkmark")
@@ -467,7 +487,7 @@ struct HomeView: View {
             longitude: vehicle.location?.longitude,
             isDCFast: isDCFast
         )
-        guard let capacity = vehicle.batteryCapacityKWh,
+        guard let capacity = vehicle.effectiveBatteryCapacityKWh,
               let rate = vehicle.chargingRate(
                   at: Date(),
                   locationType: locationType,
@@ -1078,7 +1098,7 @@ struct HomeView: View {
         vehicle: BBVehicle,
         status: VehicleStatus.EVStatus
     ) -> Double? {
-        guard let capacity = vehicle.batteryCapacityKWh, capacity > 0 else { return nil }
+        guard let capacity = vehicle.effectiveBatteryCapacityKWh, capacity > 0 else { return nil }
         let target = status.currentTargetSOC ?? 100
         return capacity * max(0, target - status.evRange.percentage) / 100
     }
@@ -1184,13 +1204,7 @@ struct HomeView: View {
     @ViewBuilder
     private var errorBanner: some View {
         if let errorMessage {
-            Button {
-                if let apiError = lastAPIError, apiError.errorType == .requiresMFA {
-                    handleMFAError(apiError)
-                } else if lastActionError != nil {
-                    showingErrorDetails = true
-                }
-            } label: {
+            Button(action: handleErrorBannerTap) {
                 HStack {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
@@ -1381,6 +1395,14 @@ struct HomeView: View {
     }
 
     // MARK: - Refresh + Errors
+
+    private func handleErrorBannerTap() {
+        if let apiError = lastAPIError, apiError.errorType == .requiresMFA {
+            handleMFAError(apiError)
+        } else if lastActionError != nil {
+            showingErrorDetails = true
+        }
+    }
 
     private func handleMFAError(_ error: APIError) {
         guard let account = bbVehicle?.account else { return }

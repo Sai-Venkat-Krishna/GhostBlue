@@ -8,9 +8,16 @@ struct VehicleActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: VehicleActivityAttributes.self) { context in
             // Lock screen/banner UI
-            VehicleActivityContentView(context: context, isLockScreen: true)
+            if AppTheme.persisted == .rivian {
+                RivianActivityContentView(context: context)
+            } else {
+                VehicleActivityContentView(context: context, isLockScreen: true)
+            }
         } dynamicIsland: { context in
-            DynamicIsland {
+            if AppTheme.persisted == .rivian {
+                return rivianIsland(context)
+            }
+            return DynamicIsland {
                 // Expanded UI
                 DynamicIslandExpandedRegion(.leading) {
                     if context.state.activityType == .debug {
@@ -106,6 +113,40 @@ struct VehicleActivityWidget: Widget {
             .widgetURL(URL(string: "ghostblue://vehicle/\(context.attributes.vin)"))
             .keylineTint(Color(red: 0.0, green: 0.84, blue: 1.0))
         }
+    }
+
+    /// Dynamic Island in the Rivian theme's palette (green charge, blue climate, gold keyline).
+    private func rivianIsland(_ context: ActivityViewContext<VehicleActivityAttributes>) -> DynamicIsland {
+        DynamicIsland {
+            DynamicIslandExpandedRegion(.leading) {
+                HStack(spacing: 6) {
+                    RivianIslandGlyph(context: context, font: .headline)
+                    if context.state.activityType == .charging {
+                        Text(formattedRange(for: context.state.status))
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                    }
+                }
+                .padding(.leading, 8)
+            }
+            DynamicIslandExpandedRegion(.trailing) {
+                RivianIslandFigure(context: context, font: .headline)
+                    .padding(.trailing, 8)
+            }
+            DynamicIslandExpandedRegion(.bottom) {
+                RivianIslandExpandedContent(context: context)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 8)
+            }
+        } compactLeading: {
+            RivianIslandGlyph(context: context)
+        } compactTrailing: {
+            RivianIslandFigure(context: context)
+        } minimal: {
+            RivianIslandGlyph(context: context)
+        }
+        .widgetURL(URL(string: "ghostblue://vehicle/\(context.attributes.vin)"))
+        .keylineTint(RVTokens.accent)
     }
 
     func formattedRange(for status: VehicleStatus) -> String {
@@ -439,9 +480,10 @@ private func cachedCarUIImage(for vin: String, vehicleName: String) -> UIImage? 
 /// Live Activities cannot rely on a network fetch. Prefer the cached vehicle
 /// render, but always show the compact vector silhouette on a fresh install
 /// or when the app group cache is unavailable.
-private struct LiveActivityCarThumbnail: View {
+struct LiveActivityCarThumbnail: View {
     let vin: String
     let vehicleName: String
+    var size = CGSize(width: 38, height: 22)
 
     var body: some View {
         Group {
@@ -453,7 +495,7 @@ private struct LiveActivityCarThumbnail: View {
                 EVCarSilhouette()
             }
         }
-        .frame(width: 38, height: 22)
+        .frame(width: size.width, height: size.height)
     }
 }
 

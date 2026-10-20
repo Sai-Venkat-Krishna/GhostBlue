@@ -50,7 +50,7 @@ struct TripDetailsView: View {
 
     private var loadingView: some View {
         VStack(spacing: 16) {
-            ProgressView()
+            BrandProgressView()
             Text("Loading trip details...")
                 .foregroundColor(.secondary)
         }
@@ -552,7 +552,7 @@ private struct TripDetailsPreviewContent: View {
         Group {
             if isLoading {
                 VStack(spacing: 16) {
-                    ProgressView()
+                    BrandProgressView()
                     Text("Loading trip details...")
                         .foregroundColor(.secondary)
                 }

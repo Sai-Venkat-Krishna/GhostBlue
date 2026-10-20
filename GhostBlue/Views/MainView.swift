@@ -142,12 +142,10 @@ struct MainView: View {
             }
         }
         .task {
-            while true {
-                let interval = await MainActor.run { AppSettings.shared.appRefreshInterval.timeInterval }
-                try? await Task.sleep(for: .seconds(interval))
-                // Skip refresh when backgrounded to avoid 0xdead10cc crashes
-                // from holding SQLite file locks during suspension
-                guard scenePhase == .active else { continue }
+            await VehicleRefreshPolicy.run(interval: {
+                AppSettings.shared.appRefreshInterval.timeInterval
+            }) {
+                guard scenePhase == .active else { return }
                 await refreshCurrentVehicleIfNeeded(modelContext: modelContext)
             }
         }
@@ -208,6 +206,7 @@ struct MainView: View {
                     displayedVehicles: displayedVehicles,
                     selectedVehicleIndex: $selectedVehicleIndex,
                     onOpenLocation: { selectedTab = .location },
+                    onOpenCharging: { selectedTab = .charging },
                     onSuccessfulRefresh: { lastError = nil },
                 )
             }
@@ -219,7 +218,7 @@ struct MainView: View {
                 )
             }
 
-            Tab("Charging", systemImage: "bolt.fill", value: AppTab.charging) {
+            Tab(appSettings.appTheme == .rivian ? "Energy" : "Charging", systemImage: "bolt.fill", value: AppTab.charging) {
                 ChargingView(
                     displayedVehicles: displayedVehicles,
                     selectedVehicleIndex: $selectedVehicleIndex,
@@ -235,8 +234,9 @@ struct MainView: View {
             .badge(newTripCount > 0 ? Text("•") : nil)
         }
         .tint(appSettings.accentColor)
+        .environment(\.themeMotion, appSettings.appTheme == .rivian ? .rivian : .standard)
         .background(TabBarReselectObserver())
-        .animation(.easeInOut(duration: 0.24), value: selectedTab)
+        .animation(appSettings.appTheme == .rivian ? ThemeMotion.rivian.emphasis : .easeInOut(duration: 0.24), value: selectedTab)
     }
 
     /// Wraps the empty/error states in a NavigationStack so Settings stays
@@ -295,7 +295,7 @@ private struct AppLockView: View {
 
                 Button(action: unlock) {
                     if isAuthenticating {
-                        ProgressView()
+                        BrandProgressView()
                             .frame(maxWidth: .infinity)
                     } else {
                         Label("Unlock", systemImage: "faceid")
@@ -310,7 +310,7 @@ private struct AppLockView: View {
             }
             .padding(30)
         }
-        .environment(\.colorScheme, .dark)
+        .ghostBlueColorScheme()
         .accessibilityAddTraits(.isModal)
     }
 }

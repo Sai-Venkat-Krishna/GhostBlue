@@ -316,6 +316,15 @@ class BBVehicle {
     var evStatus: VehicleStatus.EVStatus?
     /// Persisted so app, Shortcuts and extensions agree on an unconfirmed stop.
     var pendingChargingStopDate: Date?
+    /// Wall-clock time the pending stop was first fetched; lets a stop that
+    /// stands unchallenged for `ChargeStopPolicy.confirmationDelay` confirm
+    /// even when BlueLink keeps serving the same cached snapshot.
+    var pendingChargingStopObservedAt: Date?
+    /// Set when GhostBlue itself sends a stop-charge command. A "not
+    /// charging" reading fetched afterwards is then the expected outcome,
+    /// not a BlueLink blip, so it confirms without a second sample (see
+    /// `ChargeStopPolicy.commandWindow`).
+    var chargeStopRequestedAt: Date?
     var location: VehicleStatus.Location?
     var lockStatus: VehicleStatus.LockStatus?
     var climateStatus: VehicleStatus.ClimateStatus?
@@ -555,13 +564,38 @@ extension BBVehicle {
             return statusForDisplay(fallback: status)
         }
         var accepted = status
+        let previousOdometer = odometer
+        let commandedStop = ChargeStopPolicy.isCommandedStop(
+            requestedAt: chargeStopRequestedAt,
+            fetchedAt: status.lastUpdated
+        )
+        if let requestedAt = chargeStopRequestedAt,
+           status.lastUpdated.timeIntervalSince(requestedAt) > ChargeStopPolicy.commandWindow {
+            chargeStopRequestedAt = nil
+        }
         if let incomingEV = status.evStatus {
             let sampleDate = status.syncDate ?? status.lastUpdated
             if !incomingEV.charging, evStatus?.charging == true {
-                if let candidate = pendingChargingStopDate, sampleDate > candidate {
+                if pendingChargingStopDate != nil, pendingChargingStopObservedAt == nil {
+                    // Candidate recorded before observation times existed.
+                    pendingChargingStopObservedAt = status.lastUpdated
+                }
+                if ChargeStopPolicy.isConfirmed(
+                    incomingEV,
+                    sampleDate: sampleDate,
+                    fetchedAt: status.lastUpdated,
+                    candidateDate: pendingChargingStopDate,
+                    candidateObservedAt: pendingChargingStopObservedAt,
+                    commandedStop: commandedStop
+                ) {
                     pendingChargingStopDate = nil
+                    pendingChargingStopObservedAt = nil
+                    chargeStopRequestedAt = nil
                 } else {
-                    if pendingChargingStopDate == nil { pendingChargingStopDate = sampleDate }
+                    if pendingChargingStopDate == nil {
+                        pendingChargingStopDate = sampleDate
+                        pendingChargingStopObservedAt = status.lastUpdated
+                    }
                     // Keep the last confirmed state, but do not invent live
                     // power or an ETA while confirmation is pending.
                     accepted.evStatus = VehicleStatus.EVStatus(
@@ -576,6 +610,7 @@ extension BBVehicle {
                 }
             } else {
                 pendingChargingStopDate = nil
+                pendingChargingStopObservedAt = nil
             }
         } else {
             accepted.evStatus = evStatus
@@ -614,7 +649,7 @@ extension BBVehicle {
         tirePressureWarning = status.tirePressureWarning
 
         // Fold this sample into the charge-session log
-        recordChargingActivity(with: status)
+        recordChargingActivity(with: status, previousOdometer: previousOdometer, commandedStop: commandedStop)
         evaluateSmartAlerts(with: accepted)
 
         // Single hook covering every refresh path (periodic loop, manual
@@ -646,9 +681,11 @@ extension BBVehicle {
     // MARK: - Status Change Waiting
 
     // Simple actor to manage wake-up continuations
-    private actor StatusWaitingManager {
+    /// Internal (not private) so tests can drive the wake-up ordering.
+    actor StatusWaitingManager {
         private struct Waiter {
             let vehicleId: UUID
+            let registeredAt: ContinuousClock.Instant
             let continuation: CheckedContinuation<Void, Error>
         }
         private var waiters: [UUID: Waiter] = [:]
@@ -663,7 +700,11 @@ extension BBVehicle {
                         continuation.resume(throwing: CancellationError())
                         return
                     }
-                    waiters[token] = Waiter(vehicleId: vehicleId, continuation: continuation)
+                    waiters[token] = Waiter(
+                        vehicleId: vehicleId,
+                        registeredAt: .now,
+                        continuation: continuation
+                    )
                     timers[token] = Task {
                         do { try await Task.sleep(for: .seconds(max(0, seconds))) }
                         catch { return }
@@ -682,8 +723,15 @@ extension BBVehicle {
             else { waiter.continuation.resume() }
         }
 
-        func wakeUp(vehicleId: UUID) -> Bool {
-            let tokens = waiters.filter { $0.value.vehicleId == vehicleId }.map(\.key)
+        /// Ends sleeps that began before `issuedAt`. A status update sends
+        /// its wake-up from a detached task, so the wake from a poll's own
+        /// fetch can land after that poll has started its next sleep; without
+        /// the ordering it cut that sleep short and the polls ran back to
+        /// back, each one a real-time read that wakes the car.
+        func wakeUp(vehicleId: UUID, issuedAt: ContinuousClock.Instant = .now) -> Bool {
+            let tokens = waiters
+                .filter { $0.value.vehicleId == vehicleId && $0.value.registeredAt < issuedAt }
+                .map(\.key)
             for token in tokens { finish(token, cancelled: false) }
             return !tokens.isEmpty
         }
@@ -693,7 +741,7 @@ extension BBVehicle {
         }
     }
 
-    private static let statusWaitingManager = StatusWaitingManager()
+    static let statusWaitingManager = StatusWaitingManager()
 
     @MainActor
     func waitForStatusChange(
@@ -759,9 +807,11 @@ extension BBVehicle {
         // later property access trap with "model instance was destroyed".
         let vehicleId = id
         let vehicleName = displayName
+        let issuedAt = ContinuousClock.now
         Task {
             let wasAwakened = await Self.statusWaitingManager.wakeUp(
                 vehicleId: vehicleId,
+                issuedAt: issuedAt
             )
             if wasAwakened {
                 print(
@@ -941,17 +991,37 @@ final class ChargeSession {
         set { tariffData = newValue.flatMap { try? JSONEncoder().encode($0) } }
     }
 
+    /// Larger than any Hyundai/Kia pack; bounds sample-integrated energy when
+    /// the vehicle's capacity is unknown.
+    static let maxPlausibleCapacityKWh = 120.0
+
     func resolvedEnergyKWh(batteryCapacityKWh: Double?) -> Double {
         if let manualEnergyKWh, manualEnergyKWh.isFinite, manualEnergyKWh >= 0 { return manualEnergyKWh }
         if let capacity = batteryCapacityKWh, capacity > 0, percentAdded > 0 {
             return capacity * percentAdded / 100
         }
-        return energyAddedKWh
+        return plausibleSampledEnergyKWh(batteryCapacityKWh: batteryCapacityKWh)
     }
 
-    func energySource(batteryCapacityKWh: Double?) -> String {
+    /// Power samples are integrated across polling gaps, so a reading that
+    /// was held across a long gap can exceed what the battery could accept.
+    /// The state-of-charge change (plus one percent of reporting resolution)
+    /// is a hard ceiling on what was actually stored.
+    func plausibleSampledEnergyKWh(batteryCapacityKWh: Double?) -> Double {
+        guard energyAddedKWh.isFinite, energyAddedKWh > 0 else { return 0 }
+        let capacity = batteryCapacityKWh.flatMap { $0 > 0 ? $0 : nil } ?? Self.maxPlausibleCapacityKWh
+        return min(energyAddedKWh, capacity * (percentAdded + 1) / 100)
+    }
+
+    func energySource(batteryCapacityKWh: Double?, capacityIsModelDefault: Bool = false) -> String {
         if manualEnergyKWh != nil { return "Measured · manual" }
-        return batteryCapacityKWh != nil && percentAdded > 0 ? "Estimated from battery" : "Estimated from samples"
+        guard let capacity = batteryCapacityKWh, capacity > 0, percentAdded > 0 else {
+            return "Estimated from charger samples"
+        }
+        let capacityText = capacity.formatted(.number.precision(.fractionLength(0 ... 1)))
+        return capacityIsModelDefault
+            ? "Estimated from battery · \(capacityText) kWh model default"
+            : "Estimated from battery · \(capacityText) kWh"
     }
 
     var locationType: ChargingLocationType {
@@ -1350,17 +1420,145 @@ extension BBVehicle {
 
 // MARK: - Charge Session Detection
 
+/// Decides when a `charging = false` status ends a charge. BlueLink can emit
+/// a transient false mid-charge, so an ordinary stop waits for a second,
+/// newer snapshot. Some stops are unambiguous and need no second sample, and
+/// a cached snapshot that nothing contradicts for long enough is accepted so
+/// a finished charge is not shown as "charging" until the next drive.
+enum ChargeStopPolicy {
+    static let confirmationDelay: TimeInterval = 15 * 60
+    /// How long after GhostBlue sends a stop command a non-charging reading
+    /// counts as that command taking effect.
+    static let commandWindow: TimeInterval = 15 * 60
+
+    /// True when `fetchedAt` falls inside the window after a stop request.
+    static func isCommandedStop(requestedAt: Date?, fetchedAt: Date) -> Bool {
+        guard let requestedAt else { return false }
+        let elapsed = fetchedAt.timeIntervalSince(requestedAt)
+        return elapsed >= 0 && elapsed <= commandWindow
+    }
+
+    /// The cable is out, or the pack is at the charge target. A zero
+    /// percentage is treated as a malformed payload rather than evidence.
+    static func isDefinitive(_ status: VehicleStatus.EVStatus) -> Bool {
+        guard !status.charging, status.evRange.percentage > 0 else { return false }
+        if !status.pluggedIn { return true }
+        if let target = status.currentTargetSOC, target > 0 {
+            return status.evRange.percentage >= target - 1
+        }
+        return status.evRange.percentage >= 100
+    }
+
+    static func isConfirmed(
+        _ status: VehicleStatus.EVStatus,
+        sampleDate: Date,
+        fetchedAt: Date,
+        candidateDate: Date?,
+        candidateObservedAt: Date?,
+        commandedStop: Bool = false
+    ) -> Bool {
+        if isDefinitive(status) { return true }
+        if commandedStop, !status.charging, status.evRange.percentage > 0 { return true }
+        guard let candidateDate else { return false }
+        if sampleDate > candidateDate { return true }
+        guard let candidateObservedAt else { return false }
+        return fetchedAt.timeIntervalSince(candidateObservedAt) >= confirmationDelay
+    }
+}
+
+/// Usable pack sizes for Hyundai/Kia/Genesis EVs and PHEVs, used only when
+/// the owner has not entered a capacity. Where a model shipped with several
+/// packs the common long-range US pack is assumed, so the value is labelled
+/// as a model default wherever it is shown.
+enum BatteryCapacityCatalog {
+    static func defaultCapacityKWh(model: String, fuelType: FuelType) -> Double? {
+        let name = model.lowercased()
+            .replacingOccurrences(of: "-", with: " ")
+            .replacingOccurrences(of: "_", with: " ")
+        let compact = name.replacingOccurrences(of: " ", with: "")
+
+        switch fuelType {
+        case .gas:
+            return nil
+        case .phev:
+            if compact.contains("niro") { return 11.1 }
+            if ["tucson", "santafe", "sorento", "sportage"].contains(where: compact.contains) { return 13.8 }
+            return nil
+        case .electric:
+            let table: [(keys: [String], kWh: Double)] = [
+                (["ioniq5n"], 84.0),
+                (["ioniq9"], 110.3),
+                (["ioniq5", "ioniq6", "ev6", "gv60", "gv70"], 77.4),
+                (["ev9"], 99.8),
+                (["ev3", "ev4"], 81.4),
+                (["g80"], 87.2),
+                (["kona", "niro", "soul"], 64.8),
+                (["ioniq"], 38.3)
+            ]
+            return table.first { entry in entry.keys.contains(where: compact.contains) }?.kWh
+        }
+    }
+}
+
 extension BBVehicle {
-    /// If a charging session appears to have been abandoned (no samples for
-    /// this long while "charging"), close it at its last sample rather than
-    /// stretching it across the gap.
-    private static let staleSessionGap: TimeInterval = 3 * 3600
+    /// The owner's capacity, else the catalog default for this model.
+    var effectiveBatteryCapacityKWh: Double? {
+        if let batteryCapacityKWh, batteryCapacityKWh > 0 { return batteryCapacityKWh }
+        return BatteryCapacityCatalog.defaultCapacityKWh(model: model, fuelType: fuelType)
+    }
+
+    var isUsingModelDefaultBatteryCapacity: Bool {
+        (batteryCapacityKWh ?? 0) <= 0 && effectiveBatteryCapacityKWh != nil
+    }
+
+    func energySource(for session: ChargeSession) -> String {
+        session.energySource(
+            batteryCapacityKWh: effectiveBatteryCapacityKWh,
+            capacityIsModelDefault: isUsingModelDefaultBatteryCapacity
+        )
+    }
+
+    /// True when the samples on either side of a gap cannot belong to the
+    /// same plug-in: the odometer advanced, or the pack lost more charge
+    /// than climate or a reporting wobble could explain.
+    static func vehicleWasUsed(
+        between previousOdometer: Distance?,
+        and currentOdometer: Distance?,
+        sessionPercentage: Double,
+        currentPercentage: Double
+    ) -> Bool {
+        if currentPercentage < sessionPercentage - 2 { return true }
+        guard let previousOdometer, let currentOdometer,
+              previousOdometer.length > 0,
+              previousOdometer.units == currentOdometer.units
+        else { return false }
+        return currentOdometer.length - previousOdometer.length >= 1
+    }
+}
+
+extension BBVehicle {
+    /// Power readings are only trusted to describe this much of the time
+    /// between samples; across longer gaps the slower of the two readings is
+    /// used so a DC taper or an early finish is not over-counted.
+    private static let maxTrapezoidGap: TimeInterval = 30 * 60
+
     /// Folds a fresh status into the charge-session log: opens a session on
     /// the first charging sample, integrates energy on subsequent ones, and
     /// closes the open session when charging stops. Called from
     /// `updateStatus(with:)`, so every refresh path (app, widget, watch,
     /// command polling) feeds the same log in the shared store.
-    func recordChargingActivity(with status: VehicleStatus) {
+    ///
+    /// - Parameter previousOdometer: the odometer before this status was
+    ///   applied; a rise between two charging samples means the car was
+    ///   driven, so the samples belong to different plug-ins.
+    /// - Parameter commandedStop: GhostBlue sent a stop command shortly
+    ///   before this status was fetched, so a non-charging reading ends the
+    ///   session without waiting for a second sample.
+    func recordChargingActivity(
+        with status: VehicleStatus,
+        previousOdometer: Distance? = nil,
+        commandedStop: Bool = false
+    ) {
         guard let context = modelContext, let evStatus = status.evStatus else { return }
 
         let sampleDate = status.syncDate ?? status.lastUpdated
@@ -1391,15 +1589,30 @@ extension BBVehicle {
                 session.pendingStopPercentage = nil
             }
 
-            let gap = sampleDate.timeIntervalSince(session.lastSampleDate)
-            if gap > Self.staleSessionGap {
+            // A long polling gap alone is not a new session: an overnight
+            // charge watched only at plug-in and at breakfast is still one
+            // plug-in, and splitting it would drop the energy added in
+            // between. Only evidence the car was used in the meantime (it
+            // was driven, or the pack lost charge) closes the old session.
+            if Self.vehicleWasUsed(
+                between: previousOdometer,
+                and: status.odometer,
+                sessionPercentage: session.endPercentage,
+                currentPercentage: percentage
+            ) {
                 session.endDate = session.lastSampleDate
                 startChargeSession(at: sampleDate, percentage: percentage, evStatus: evStatus, context: context)
                 return
             }
 
-            if evStatus.chargeSpeed > 0 {
-                session.energyAddedKWh += evStatus.chargeSpeed * gap / 3600
+            let gap = sampleDate.timeIntervalSince(session.lastSampleDate)
+            let previousSpeed = session.speedSamples.last?.speedKW ?? evStatus.chargeSpeed
+            let currentSpeed = max(0, evStatus.chargeSpeed)
+            let intervalPower = gap <= Self.maxTrapezoidGap
+                ? (max(0, previousSpeed) + currentSpeed) / 2
+                : min(max(0, previousSpeed), currentSpeed)
+            if intervalPower > 0 {
+                session.energyAddedKWh += intervalPower * gap / 3600
             }
             session.appendSpeedSample(
                 date: sampleDate,
@@ -1417,21 +1630,34 @@ extension BBVehicle {
             // replayed status close a newer active session.
             guard sampleDate > session.lastSampleDate else { return }
 
-            if let pendingStopDate = session.pendingStopDate {
-                // Replaying the same server snapshot is not independent
-                // evidence of a stop, no matter how often it was fetched.
-                guard sampleDate > pendingStopDate else { return }
-
+            if ChargeStopPolicy.isConfirmed(
+                evStatus,
+                sampleDate: sampleDate,
+                fetchedAt: status.lastUpdated,
+                candidateDate: session.pendingStopDate,
+                candidateObservedAt: session.pendingStopObservedAt,
+                commandedStop: commandedStop
+            ) {
+                // A confirmed candidate dates the stop; a definitive first
+                // sample (unplugged, or at the target) dates it itself.
+                let stopDate = session.pendingStopDate ?? sampleDate
                 session.endPercentage = max(
                     session.endPercentage,
                     session.pendingStopPercentage ?? percentage,
                     percentage
                 )
-                session.endDate = pendingStopDate
-                session.lastSampleDate = pendingStopDate
+                session.endDate = stopDate
+                session.lastSampleDate = stopDate
                 session.pendingStopDate = nil
                 session.pendingStopObservedAt = nil
                 session.pendingStopPercentage = nil
+            } else if session.pendingStopDate != nil {
+                // Replaying the same server snapshot is not independent
+                // evidence of a stop until it has stood unchallenged for the
+                // confirmation delay.
+                if session.pendingStopObservedAt == nil {
+                    session.pendingStopObservedAt = status.lastUpdated
+                }
             } else {
                 // Persist the candidate so debounce works across app, widget,
                 // Watch, and Shortcuts processes.
@@ -1561,7 +1787,7 @@ extension BBVehicle {
     }
 
     func energyDelivered(for session: ChargeSession) -> Double {
-        session.resolvedEnergyKWh(batteryCapacityKWh: batteryCapacityKWh)
+        session.resolvedEnergyKWh(batteryCapacityKWh: effectiveBatteryCapacityKWh)
     }
 
     func chargingCost(for session: ChargeSession) -> Double? {
@@ -1734,23 +1960,32 @@ extension BBVehicle {
             predicate: #Predicate { $0.vin == vehicleVIN && $0.isEnabled }
         )
         guard let rules = try? context.fetch(descriptor) else { return }
+        var triggered = false
         for rule in rules {
-            let shouldTrigger: Bool
+            let body: String?
             switch rule.kind {
             case .lowBattery:
                 let old = previous.batteryPercentage ?? 100
                 let new = snapshot.batteryPercentage ?? 100
-                shouldTrigger = old > rule.threshold && new <= rule.threshold
+                body = old > rule.threshold && new <= rule.threshold
+                    ? "\(displayName) is at \(new)%, at or below your \(rule.threshold)% rule."
+                    : nil
             case .unplugged:
-                shouldTrigger = previous.pluggedIn && !snapshot.pluggedIn
+                body = previous.pluggedIn && !snapshot.pluggedIn
+                    ? "\(displayName) was unplugged" + (snapshot.batteryPercentage.map { " at \($0)%." } ?? ".")
+                    : nil
             case .preconditionReminder:
-                shouldTrigger = false
+                // Time-based; scheduled by AutomationReminderScheduler.
+                body = nil
             }
-            guard shouldTrigger else { continue }
+            guard let body else { continue }
             rule.lastTriggeredAt = Date()
-            alerts.append((rule.title, "\(displayName) matched your automation rule."))
+            alerts.append((rule.title, body))
+            triggered = true
         }
-        try? context.save()
+        if triggered {
+            try? context.save()
+        }
     }
 
     @MainActor

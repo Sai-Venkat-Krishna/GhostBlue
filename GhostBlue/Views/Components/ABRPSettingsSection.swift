@@ -16,13 +16,19 @@ struct ABRPSettingsSection: View {
 
     var body: some View {
         Section {
-            SecureField("Plan API Key", text: $appSettings.abrpPlanApiKey)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            SecureField("Telemetry API Key", text: $appSettings.abrpTelemetryApiKey)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            Toggle("Send Live Data to ABRP", isOn: $appSettings.abrpTelemetryEnabled)
+            RivianRowIcon(systemImage: "key.fill", tint: RV.energy) {
+                SecureField("Plan API Key", text: $appSettings.abrpPlanApiKey)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+            }
+            RivianRowIcon(systemImage: "antenna.radiowaves.left.and.right", tint: RV.energy) {
+                SecureField("Telemetry API Key", text: $appSettings.abrpTelemetryApiKey)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+            }
+            Toggle(isOn: $appSettings.abrpTelemetryEnabled) {
+                SettingsRowLabel(title: "Send Live Data to ABRP", systemImage: "paperplane.fill", tint: RV.energy)
+            }
         } header: {
             Text("ABRP Route Planning")
         } footer: {

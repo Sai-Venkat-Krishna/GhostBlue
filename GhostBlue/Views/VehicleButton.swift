@@ -147,7 +147,7 @@ struct VehicleControlButton: View {
     private var quickActionButtonLabel: some View {
         Group {
             if inProgressAction != nil {
-                ProgressView()
+                BrandProgressView()
                     .scaleEffect(0.8)
             } else {
                 quickActionIcon

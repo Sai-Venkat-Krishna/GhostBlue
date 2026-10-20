@@ -30,20 +30,17 @@ enum GhostBlue {
 // MARK: - Glass helper modifier
 
 private extension View {
-    /// Applies iOS 26 liquid glass, falls back to ultraThinMaterial on older OS.
-    @ViewBuilder
+    /// Frosted panel: ultraThinMaterial with a hairline stroke.
+    /// Don't use `glassEffect` here — inside a widget on iOS 26 it renders
+    /// nothing, hiding the wrapped content along with the glass.
     func ghostGlass(cornerRadius: CGFloat = 14) -> some View {
-        if #available(iOS 26.0, *) {
-            self.glassEffect(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        } else {
-            self.background {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .stroke(Color.white.opacity(0.18), lineWidth: 0.5)
-                    }
-            }
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        return background {
+            shape
+                .fill(.ultraThinMaterial)
+                .overlay { shape.stroke(Color.white.opacity(0.18), lineWidth: 0.5) }
+                // The widget background is always dark; keep the material dark too.
+                .environment(\.colorScheme, .dark)
         }
     }
 }
@@ -259,7 +256,7 @@ private struct VehicleInfoPanel: View {
                         .lineLimit(1)
                     Spacer(minLength: 4)
                     Button(intent: {
-                        var i = RefreshVehicleStatusIntent()
+                        let i = RefreshVehicleStatusIntent()
                         i.vehicle = vehicle
                         return i
                     }()) {
@@ -344,9 +341,24 @@ private struct ChargingStatusView: View {
     private var currentPct: Double { (vehicle.batteryPercentage ?? 0) / 100.0 }
     private var targetPct: Double  { (vehicle.targetSOC ?? 100.0) / 100.0 }
 
+    /// BlueLink's cached snapshot often lags during a charge; a stale but
+    /// charging snapshot still shows progress (its age is shown elsewhere)
+    /// rather than collapsing to "Status outdated".
+    private var showsChargingProgress: Bool {
+        switch vehicle.chargingState {
+        case .charging, .unknown: true
+        case .outdated: vehicle.isCharging
+        default: false
+        }
+    }
+
     var body: some View {
         if vehicle.isChargeComplete {
             chargeCompleteView
+        } else if !showsChargingProgress {
+            Label(vehicle.chargingState.title, systemImage: "bolt.badge.clock")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
         } else {
             activeChargingView
         }
@@ -670,9 +682,22 @@ private struct ChargingStatusMini: View {
     private var currentPct: Double { (vehicle.batteryPercentage ?? 0) / 100.0 }
     private var targetPct: Double  { (vehicle.targetSOC ?? 100.0) / 100.0 }
 
+    /// BlueLink's cached snapshot often lags during a charge; a stale but
+    /// charging snapshot still shows progress (its age is shown elsewhere)
+    /// rather than collapsing to "Status outdated".
+    private var showsChargingProgress: Bool {
+        switch vehicle.chargingState {
+        case .charging, .unknown: true
+        case .outdated: vehicle.isCharging
+        default: false
+        }
+    }
+
     var body: some View {
         if vehicle.isChargeComplete {
             chargeMiniCompleteView
+        } else if !showsChargingProgress {
+            Text(vehicle.chargingState.title).font(.caption2).foregroundStyle(.secondary)
         } else {
             activeMiniChargingView
         }
@@ -816,7 +841,7 @@ private struct VehicleHeroCard: View {
                     .lineLimit(1)
                 Spacer(minLength: 8)
                 Button(intent: {
-                    var i = RefreshVehicleStatusIntent()
+                    let i = RefreshVehicleStatusIntent()
                     i.vehicle = vehicle
                     return i
                 }()) {
@@ -957,6 +982,14 @@ struct VehicleWidgetEntryView: View {
     @Environment(\.widgetFamily) private var family
 
     var body: some View {
+        if AppTheme.persisted == .rivian {
+            RivianCommandCenterView(entry: entry)
+        } else {
+            classicBody
+        }
+    }
+
+    private var classicBody: some View {
         Group {
             if let vehicle = entry.vehicle {
                 switch family {

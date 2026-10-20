@@ -37,13 +37,10 @@ struct Line: Shape {
 }
 
 extension View {
-    /// Applies consistent vehicle button card styling with rounded corners using iOS 26 glassEffect
+    /// Applies consistent vehicle button card styling with rounded corners using iOS 26
+    /// glassEffect — or a solid surface when `gbSolidCardColor` is set (Rivian theme).
     func vehicleCardGlassEffect(radius: CGFloat = 12.0) -> some View {
-        let shape = RoundedRectangle(cornerRadius: radius)
-        return self
-            .containerShape(shape)
-            .glassEffect(.regular.interactive(), in: shape)
-            .clipShape(shape)
+        modifier(VehicleCardSurface(radius: radius))
     }
 
     /// Stagger-in entrance: slides up 18pt and fades in with a spring, delayed by `delay` seconds.
@@ -55,5 +52,40 @@ extension View {
                 .spring(response: 0.55, dampingFraction: 0.88).delay(delay),
                 value: visible
             )
+    }
+}
+
+// MARK: - Card surface style
+
+private struct GBSolidCardColorKey: EnvironmentKey {
+    static let defaultValue: Color? = nil
+}
+
+extension EnvironmentValues {
+    /// When set (e.g. by the Rivian theme), card surfaces render as this solid colour
+    /// instead of Liquid Glass. `nil` (the default) keeps the classic glass look.
+    var gbSolidCardColor: Color? {
+        get { self[GBSolidCardColorKey.self] }
+        set { self[GBSolidCardColorKey.self] = newValue }
+    }
+}
+
+private struct VehicleCardSurface: ViewModifier {
+    let radius: CGFloat
+    @Environment(\.gbSolidCardColor) private var solid
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: radius)
+        if let solid {
+            content
+                .containerShape(shape)
+                .background(solid, in: shape)
+                .clipShape(shape)
+        } else {
+            content
+                .containerShape(shape)
+                .glassEffect(.regular.interactive(), in: shape)
+                .clipShape(shape)
+        }
     }
 }
