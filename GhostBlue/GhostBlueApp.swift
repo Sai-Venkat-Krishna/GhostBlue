@@ -61,7 +61,7 @@ struct GhostBlueApp: App {
 
     var body: some Scene {
         WindowGroup {
-            MainView()
+            rootView
                 .onOpenURL { url in
                     // A backup AirDropped or opened from Files; MainView shows
                     // the import preview once the app is unlocked.
@@ -91,6 +91,19 @@ struct GhostBlueApp: App {
                 }
         }
         .modelContainer(sharedModelContainer)
+    }
+
+    @ViewBuilder
+    private var rootView: some View {
+        #if DEBUG
+        if let size = UITestFlags.layoutPreviewSize {
+            LayoutSizePreview(size: size) { MainView() }
+        } else {
+            MainView()
+        }
+        #else
+        MainView()
+        #endif
     }
 
     private func handleDeepLink(_ url: URL) {

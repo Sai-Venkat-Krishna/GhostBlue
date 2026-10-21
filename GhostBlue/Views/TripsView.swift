@@ -58,10 +58,15 @@ struct TripsView: View {
     @State private var showingTripComparison = false
     @State private var exportingTrips = false
     @State private var exportErrorMessage: String?
+    @State private var screenSize: CGSize = .zero
     @AppStorage(
         "TripsDetailedMode",
         store: UserDefaults(suiteName: "group.com.saivenkatkrishna.ghostblue.shared")
     ) private var detailedMode = false
+
+    /// Wide screens (the iPhone Duo's inner display) put the charts beside the
+    /// overview and lay saved trips out in two columns.
+    private var isWide: Bool { AdaptiveLayout.isWide(screenSize.width) }
 
     private var bbVehicle: BBVehicle? {
         guard selectedVehicleIndex < displayedVehicles.count else { return nil }
@@ -298,26 +303,28 @@ struct TripsView: View {
                             filteredEmptyCard
                                 .cardEntry(visible: contentVisible, delay: 0.06)
                         } else {
-                            overviewCard(for: bbVehicle)
-                                .cardEntry(visible: contentVisible, delay: 0.06)
+                            AdaptiveColumns(isWide: isWide) {
+                                overviewCard(for: bbVehicle)
+                                    .cardEntry(visible: contentVisible, delay: 0.06)
+                            } trailing: {
+                                collapsibleTripsSection(
+                                    title: "Efficiency trend",
+                                    systemImage: "chart.xyaxis.line",
+                                    isExpanded: $showEfficiencyTrend
+                                ) {
+                                    trendCard
+                                }
+                                .cardEntry(visible: contentVisible, delay: 0.09)
 
-                            collapsibleTripsSection(
-                                title: "Efficiency trend",
-                                systemImage: "chart.xyaxis.line",
-                                isExpanded: $showEfficiencyTrend
-                            ) {
-                                trendCard
+                                collapsibleTripsSection(
+                                    title: "Energy usage",
+                                    systemImage: "chart.bar.fill",
+                                    isExpanded: $showEnergyUsage
+                                ) {
+                                    chartCard
+                                }
+                                .cardEntry(visible: contentVisible, delay: 0.11)
                             }
-                            .cardEntry(visible: contentVisible, delay: 0.09)
-
-                            collapsibleTripsSection(
-                                title: "Energy usage",
-                                systemImage: "chart.bar.fill",
-                                isExpanded: $showEnergyUsage
-                            ) {
-                                chartCard
-                            }
-                            .cardEntry(visible: contentVisible, delay: 0.11)
 
                             GBSectionHeader(title: "Saved trips")
                                 .cardEntry(visible: contentVisible, delay: 0.14)
@@ -329,56 +336,16 @@ struct TripsView: View {
                                 ForEach(savedTripGroups) { group in
                                     tripGroupHeader(group.day)
 
-                                    ForEach(Array(group.trips.enumerated()), id: \.element.id) { index, trip in
-                                        let record = archivedRecord(for: trip)
-                                        TripCard(
-                                            trip: trip,
-                                            record: record,
-                                            distanceUnit: appSettings.preferredDistanceUnit,
-                                            isExpanded: expandedTripId == trip.id,
-                                            comparisonMode: comparisonMode,
-                                            isComparisonSelected: comparedTripIDs.contains(trip.id),
-                                            hideLocation: appSettings.hideVehicleLocation,
-                                            onTap: {
-                                                if comparisonMode {
-                                                    toggleTripComparisonSelection(trip)
-                                                } else {
-                                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-                                                        expandedTripId = expandedTripId == trip.id ? nil : trip.id
-                                                    }
-                                                }
-                                            },
-                                            onRename: { beginRenaming(record) },
-                                            onFavorite: { toggleFavorite(record) },
-                                            onDelete: { deleteTrip(record) }
-                                        )
-                                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                            Button {
-                                                toggleFavorite(record)
-                                            } label: {
-                                                Label(
-                                                    record?.isFavorite == true ? "Unfavorite" : "Favorite",
-                                                    systemImage: "star.fill"
-                                                )
-                                            }
-                                            .tint(.yellow)
+                                    LazyVGrid(
+                                        columns: Array(
+                                            repeating: GridItem(.flexible(), spacing: 12, alignment: .top),
+                                            count: isWide ? 2 : 1
+                                        ),
+                                        spacing: 12
+                                    ) {
+                                        ForEach(Array(group.trips.enumerated()), id: \.element.id) { index, trip in
+                                            tripCard(trip, index: index)
                                         }
-                                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                            Button { beginRenaming(record) } label: {
-                                                Label("Rename", systemImage: "pencil")
-                                            }
-                                            .tint(.blue)
-
-                                            Button(role: .destructive) {
-                                                deleteTrip(record)
-                                            } label: {
-                                                Label("Delete", systemImage: "trash")
-                                            }
-                                        }
-                                        .cardEntry(
-                                            visible: contentVisible,
-                                            delay: 0.15 + min(Double(index) * 0.02, 0.12)
-                                        )
                                     }
                                 }
                             }
@@ -419,6 +386,14 @@ struct TripsView: View {
             .contentMargins(.bottom, 88, for: .scrollContent)
             .scrollIndicators(.hidden)
             .scrollEdgeEffectStyle(.hard, for: [.top, .bottom])
+            .readSize(into: $screenSize)
+            .onChange(of: isWide) { _, wide in
+                // Side by side with the overview there's room for both charts.
+                if wide {
+                    showEfficiencyTrend = true
+                    showEnergyUsage = true
+                }
+            }
             .refreshable {
                 await loadTrips(for: bbVehicle)
             }
@@ -458,6 +433,58 @@ struct TripsView: View {
                 removeUnavailableComparisonTrips()
             }
         }
+    }
+
+    private func tripCard(_ trip: EVTripDetail, index: Int) -> some View {
+        let record = archivedRecord(for: trip)
+        return TripCard(
+            trip: trip,
+            record: record,
+            distanceUnit: appSettings.preferredDistanceUnit,
+            isExpanded: expandedTripId == trip.id,
+            comparisonMode: comparisonMode,
+            isComparisonSelected: comparedTripIDs.contains(trip.id),
+            hideLocation: appSettings.hideVehicleLocation,
+            onTap: {
+                if comparisonMode {
+                    toggleTripComparisonSelection(trip)
+                } else {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                        expandedTripId = expandedTripId == trip.id ? nil : trip.id
+                    }
+                }
+            },
+            onRename: { beginRenaming(record) },
+            onFavorite: { toggleFavorite(record) },
+            onDelete: { deleteTrip(record) }
+        )
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            Button {
+                toggleFavorite(record)
+            } label: {
+                Label(
+                    record?.isFavorite == true ? "Unfavorite" : "Favorite",
+                    systemImage: "star.fill"
+                )
+            }
+            .tint(.yellow)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button { beginRenaming(record) } label: {
+                Label("Rename", systemImage: "pencil")
+            }
+            .tint(.blue)
+
+            Button(role: .destructive) {
+                deleteTrip(record)
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+        .cardEntry(
+            visible: contentVisible,
+            delay: 0.15 + min(Double(index) * 0.02, 0.12)
+        )
     }
 
     // MARK: - Header

@@ -271,6 +271,11 @@ struct ChargeHistoryView: View {
     @State private var showingManualEntry = false
     @State private var showingCostSettings = false
     @State private var appSettings = AppSettings.shared
+    @State private var screenSize: CGSize = .zero
+
+    /// Wide screens (the iPhone Duo's inner display) pair cards side by side
+    /// and lay sessions out in two columns.
+    private var isWide: Bool { AdaptiveLayout.isWide(screenSize.width) }
 
     /// Energy accent: Rivian green under the Rivian theme, classic cyan otherwise.
     private var energyTint: Color { appSettings.appTheme == .rivian ? RV.energy : .cyan }
@@ -414,46 +419,39 @@ struct ChargeHistoryView: View {
                     LazyVStack(spacing: 12) {
                         header
                             .id("charging-top")
-                        if appSettings.appTheme == .rivian {
-                            RivianEnergyHero(bbVehicle: bbVehicle)
-                        } else {
-                            ChargingStatusSummary(vehicle: bbVehicle)
-                        }
 
                         if sessions.isEmpty {
+                            statusHero
                             emptyCard
                         } else {
-                            rangePicker
-                            energyDeliveredCard
+                            AdaptiveColumns(isWide: isWide) {
+                                statusHero
+                            } trailing: {
+                                rangePicker
+                                energyDeliveredCard
+                            }
 
                             if displayedSessions.isEmpty {
                                 noSessionsInRangeCard
                             } else {
                                 statsGrid
-                                energyTrendCard
-                                chargingInsightsCard
+                                AdaptiveColumns(isWide: isWide) {
+                                    energyTrendCard
+                                } trailing: {
+                                    chargingInsightsCard
+                                }
 
                                 GBSectionHeader(title: "Sessions")
 
-                                ForEach(displayedSessions) { session in
-                                    VStack(spacing: 6) {
-                                        ChargeSessionCard(
-                                            session: session,
-                                            energyKWh: energy(for: session),
-                                            energySource: bbVehicle.energySource(for: session),
-                                            cost: bbVehicle.chargingCost(for: session)
-                                        )
-
-                                        Button {
-                                            editingSession = session
-                                        } label: {
-                                            Label("Edit session", systemImage: "pencil")
-                                                .font(.caption.bold())
-                                                .frame(maxWidth: .infinity)
-                                                .padding(.vertical, 8)
-                                        }
-                                        .buttonStyle(.plain)
-                                        .foregroundStyle(.secondary)
+                                LazyVGrid(
+                                    columns: Array(
+                                        repeating: GridItem(.flexible(), spacing: 12, alignment: .top),
+                                        count: isWide ? 2 : 1
+                                    ),
+                                    spacing: 12
+                                ) {
+                                    ForEach(displayedSessions) { session in
+                                        sessionRow(session)
                                     }
                                 }
                             }
@@ -463,6 +461,7 @@ struct ChargeHistoryView: View {
                     .padding(.bottom, 24)
                 }
                 .scrollIndicators(.hidden)
+                .readSize(into: $screenSize)
                 .onReceive(NotificationCenter.default.publisher(for: .scrollChargingToTop)) { _ in
                     withAnimation(.easeOut(duration: 0.35)) {
                         proxy.scrollTo("charging-top", anchor: .top)
@@ -698,8 +697,39 @@ struct ChargeHistoryView: View {
         }
     }
 
+    @ViewBuilder
+    private var statusHero: some View {
+        if appSettings.appTheme == .rivian {
+            RivianEnergyHero(bbVehicle: bbVehicle)
+        } else {
+            ChargingStatusSummary(vehicle: bbVehicle)
+        }
+    }
+
+    private func sessionRow(_ session: ChargeSession) -> some View {
+        VStack(spacing: 6) {
+            ChargeSessionCard(
+                session: session,
+                energyKWh: energy(for: session),
+                energySource: bbVehicle.energySource(for: session),
+                cost: bbVehicle.chargingCost(for: session)
+            )
+
+            Button {
+                editingSession = session
+            } label: {
+                Label("Edit session", systemImage: "pencil")
+                    .font(.caption.bold())
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+        }
+    }
+
     private var statsGrid: some View {
-        let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: isWide ? 4 : 2)
 
         return LazyVGrid(columns: columns, spacing: 10) {
             GBStatTile(

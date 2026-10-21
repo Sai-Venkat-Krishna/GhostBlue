@@ -31,6 +31,18 @@ struct RivianDashboard: View {
     @State private var showingControls = false
     @State private var showingClimate = false
     @State private var showingService = false
+    @State private var screenSize: CGSize = .zero
+
+    /// Wide screens (the iPhone Duo's inner display) put the car and its
+    /// commands beside the tiles, so everything fits without scrolling.
+    private var isWide: Bool { AdaptiveLayout.isWide(screenSize.width) }
+
+    /// The hero shrinks on short screens (the Duo's outer display) so the
+    /// tiles stay above the fold.
+    private var heroHeight: CGFloat {
+        if isWide { return 250 }
+        return AdaptiveLayout.isShort(screenSize.height) ? 170 : 220
+    }
 
     private var batteryPercent: Int? {
         guard let ev = bbVehicle.evStatus else { return nil }
@@ -47,13 +59,17 @@ struct RivianDashboard: View {
                 if let errorMessage {
                     errorBanner(errorMessage)
                 }
-                heroCard
-                RivianCommandControls(bbVehicle: bbVehicle, onMore: { showingControls = true })
-                tileGrid
+                AdaptiveColumns(isWide: isWide, spacing: RV.Space.xl) {
+                    heroCard
+                    RivianCommandControls(bbVehicle: bbVehicle, onMore: { showingControls = true })
+                } trailing: {
+                    tileGrid
+                }
             }
             .padding(.horizontal, RV.Space.l)
             .padding(.bottom, RV.Space.xxl)
         }
+        .readSize(into: $screenSize)
         .rivianStatusBarBackdrop()
         .background(RVBackground())
         .sheet(isPresented: $showingControls) {
@@ -181,7 +197,7 @@ struct RivianDashboard: View {
                 .frame(maxWidth: .infinity)
                 .padding(24)
         }
-        .frame(height: 220)
+        .frame(height: heroHeight)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(bbVehicle.displayName) vehicle image")
     }

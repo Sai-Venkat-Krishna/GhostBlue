@@ -21,6 +21,16 @@ enum AppTab: Hashable {
     case location
     case charging
     case trips
+
+    /// The tab requested by `-startTab` or `-startOnLocationTab`, for UI checks.
+    static var launchTab: AppTab {
+        switch UITestFlags.startTab {
+        case "location": .location
+        case "energy", "charging": .charging
+        case "trips": .trips
+        default: UITestFlags.startOnLocationTab ? .location : .home
+        }
+    }
 }
 
 extension Notification.Name {
@@ -41,7 +51,7 @@ struct MainView: View {
     @Query(sort: \TripRecord.savedDate, order: .reverse)
     private var archivedTrips: [TripRecord]
 
-    @State private var selectedTab: AppTab = UITestFlags.startOnLocationTab ? .location : .home
+    @State private var selectedTab: AppTab = .launchTab
     @State private var appSettings = AppSettings.shared
     @State private var selectedVehicleIndex = 0
     @State private var isLoading = false
