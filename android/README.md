@@ -2,14 +2,14 @@
 
 The Android version of GhostBlue, built natively in Kotlin with Jetpack Compose
 and **Material 3 Expressive**. It's being ported in phases; this folder holds
-phases 1 and 2.
+phases 1 to 3.
 
 | Phase | What | State |
 |---|---|---|
 | 1 | Vehicle API in Kotlin (BetterBlueKit port): Hyundai USA, test car, tests | **Done** |
 | 2 | Storage (Room), charge-session detection, smart charging, backups in both directions | **Done** |
-| 3 | Screens: Home, Location, Energy, Trips, Settings; foldable layouts | Next |
-| 4 | Widgets, Quick Settings tiles, notifications, background automation | |
+| 3 | Screens: Home, Location, Energy, Trips, Settings; foldable layouts | **Done** |
+| 4 | Widgets, Quick Settings tiles, notifications, background automation | Next |
 | 5 | Wear OS | |
 
 ## Modules
@@ -46,9 +46,39 @@ phases 1 and 2.
     moves between an iPhone and an Android phone in either direction.
 - **`bbcli/`**: command-line tool, the Kotlin counterpart of BetterBlueKit's
   `bbcli`.
-- **`app/`**: the Android app. It has the Material 3 Expressive theme
-  (wallpaper colours, expressive motion) and a preview screen that drives the
-  test car. The real screens come in phase 3.
+- **`app/`**: the Android app, in Material 3 Expressive (wallpaper colours,
+  expressive motion and shapes), with the iOS app's Rivian look as an option
+  in Settings. Every screen observes Room and acts through `data`; nothing
+  of its logic is reimplemented.
+  - `GarageModel`: the app's state and actions for every screen (the
+    selected car, commands in flight with their progress line, refreshes,
+    sign-in, the owner's edits). Commands send, then wait for the car to
+    report the change, as iOS's buttons do; tapping again cancels.
+  - `MainScaffold`: `NavigationSuiteScaffold`, a bar on phones and a rail on
+    foldables and tablets: Home, Location, Energy, Trips and Settings.
+  - `home/`: the car (the same renders as iOS), lock and unlock as a
+    connected button group, climate as a split button with its presets,
+    charging and charge limits, the smart briefing, status and location.
+    `RivianDashboard` is the Rivian theme's version.
+  - `location/`: the car on Google Maps with Navigate.
+  - `energy/`: the charging log, as `ChargeHistoryView`: status, Week /
+    Month / 3 months, energy, stats, the trend, insights, sessions with
+    editing and manual entry, prices, the SDG&E schedule and CSV export.
+  - `trips/`: as `TripsView`: filters, the efficiency trend, energy use,
+    saved trips with rename, favourite and delete (with undo), comparison
+    and CSV export. `TripAnalytics` ports iOS's `TripAnalytics`,
+    `TripChartData` and `TripCSVExporter`.
+  - `settings/`: accounts (sign-in, including the test account and its test
+    cars), vehicles, theme, units, privacy, backups through the share sheet
+    and file picker (and `.ghostbluebackup` files opened from other apps),
+    HTTP logs and about.
+  - Layouts use two columns from 600 dp wide, as iOS's `AdaptiveLayout`.
+
+  iOS screens not ported in phase 3: rearranging Home's sections, the ABRP
+  route planner, the ownership hub (maintenance reminders, automations), the
+  test-car editor, the verification-code (MFA) prompt, Face ID lock,
+  troubleshooting and the debug export. Smart charging runs only from
+  "Check charging now" until phase 4 schedules it.
 
 Not ported yet: Kia USA, Hyundai Canada and Europe, and MFA. The factory
 reports these as not yet supported; unlike iOS, which falls back to the test
@@ -74,13 +104,35 @@ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 ```
 
 ```bash
-./gradlew :betterbluekit:test :data:testDebugUnitTest :app:assembleDebug
+./gradlew :betterbluekit:test :data:testDebugUnitTest :app:testDebugUnitTest :app:assembleDebug
 ```
 
-The `data` tests run Room under Robolectric, so they need no emulator. They
+The `data` tests run Room under Robolectric, so they need no emulator. So do
+the `app` tests: Compose UI tests of the main flows against the test car
+(signing in, lock and climate, each tab, units, the Rivian theme, a manual
+charging session, trips, privacy, backups, HTTP logs), the two-column layouts
+at a Pixel Fold's inner-screen size, and the screens' ported rules. They
 include ports of the iOS suites (EnergySessionAccuracy, ChargingReliability,
 SmartChargingAutomation, WakeUpReduction, BackupArchive, BackupTransfer,
 VehicleArchive, OwnershipFeature) with the smart-charging waits on virtual time.
+
+### Google Maps
+
+The Location tab uses Google Maps. Create a Maps SDK for Android key in Google
+Cloud and add it to `local.properties`, which stays out of git:
+
+```properties
+MAPS_API_KEY=your-key
+```
+
+Without a key the map is a placeholder showing the car's coordinates;
+Navigate still works.
+
+### Emulators
+
+`GhostBlue_Pixel_9` and `GhostBlue_Pixel_9_Pro_Fold` (Android 16, Google
+APIs) run the app. Give them the host GPU (`hw.gpu.mode=host`) and 4 GB of
+RAM; with software rendering every frame takes seconds.
 
 ## Try it with your car
 

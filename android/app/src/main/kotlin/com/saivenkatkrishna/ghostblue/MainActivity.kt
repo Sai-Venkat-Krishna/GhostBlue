@@ -1,39 +1,37 @@
 package com.saivenkatkrishna.ghostblue
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.saivenkatkrishna.ghostblue.kit.logging.BBLogCategory
-import com.saivenkatkrishna.ghostblue.kit.logging.BBLogLevel
-import com.saivenkatkrishna.ghostblue.kit.logging.BBLogSink
-import com.saivenkatkrishna.ghostblue.kit.logging.BBLogger
-import com.saivenkatkrishna.ghostblue.ui.TestCarScreen
-import com.saivenkatkrishna.ghostblue.ui.theme.GhostBlueTheme
+import kotlinx.coroutines.flow.MutableStateFlow
+import com.saivenkatkrishna.ghostblue.ui.GhostBlueApp
 
 class MainActivity : ComponentActivity() {
+    /** A backup file opened from another app, waiting for the import sheet. */
+    private val incomingBackup = MutableStateFlow<Uri?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        BBLogger.sink = LogcatSink
         enableEdgeToEdge()
+        if (savedInstanceState == null) handle(intent)
+        val graph = (application as GhostBlueApplication).graph
         setContent {
-            GhostBlueTheme {
-                TestCarScreen()
-            }
+            GhostBlueApp(graph, incomingBackup)
         }
     }
-}
 
-/** Sends the vehicle API's log lines to Logcat under "GhostBlue/<category>". */
-private object LogcatSink : BBLogSink {
-    override fun log(level: BBLogLevel, category: BBLogCategory, message: String) {
-        val tag = "GhostBlue/${category.rawValue}"
-        when (level) {
-            BBLogLevel.DEBUG -> Log.d(tag, message)
-            BBLogLevel.INFO -> Log.i(tag, message)
-            BBLogLevel.WARNING -> Log.w(tag, message)
-            BBLogLevel.ERROR -> Log.e(tag, message)
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handle(intent)
+    }
+
+    private fun handle(intent: Intent?) {
+        if (intent?.action == Intent.ACTION_VIEW || intent?.action == Intent.ACTION_SEND) {
+            val uri = intent.data ?: @Suppress("DEPRECATION") intent.getParcelableExtra(Intent.EXTRA_STREAM)
+            if (uri != null) incomingBackup.value = uri
         }
     }
 }

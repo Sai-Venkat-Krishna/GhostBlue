@@ -1,0 +1,3 @@
+<resources>
+    <style name="Theme.GhostBlue" parent="android:Theme.Material.NoActionBar" />
+</resources>
