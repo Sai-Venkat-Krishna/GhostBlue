@@ -1,8 +1,8 @@
 # GhostBlue for Android
 
 The Android version of GhostBlue, built natively in Kotlin with Jetpack Compose
-and **Material 3 Expressive**. It's being ported in phases; this folder holds
-phases 1 to 4.
+and **Material 3 Expressive**, with a Wear OS app. It was ported in five
+phases, all of them in this folder.
 
 | Phase | What | State |
 |---|---|---|
@@ -10,7 +10,7 @@ phases 1 to 4.
 | 2 | Storage (Room), charge-session detection, smart charging, backups in both directions | **Done** |
 | 3 | Screens: Home, Location, Energy, Trips, Settings; foldable layouts | **Done** |
 | 4 | Widgets, Quick Settings tiles, notifications, background automation | **Done** |
-| 5 | Wear OS | Next |
+| 5 | Wear OS: the watch app, a tile, complications, accounts from the phone | **Done** |
 
 ## Modules
 
@@ -27,8 +27,8 @@ phases 1 to 4.
   - `api/fake/`: the test car, including GhostBlue's charging simulation. Its
     storage sits behind `FakeVehicleStore`; the app keeps it in its database.
 - **`data/`**: the app's storage and the logic built on it, ported from
-  `GhostBlue/Models` and `GhostBlue/Utility`. An Android library, so widgets,
-  tiles and Wear OS can share it later.
+  `GhostBlue/Models` and `GhostBlue/Utility`. An Android library, shared by the
+  phone app and the watch.
   - `model/`, `db/`: Room entities with the SwiftData models' names and fields
     (accounts, vehicles with every owner setting, charge sessions, climate
     presets, trips, the command log, maintenance, automations, HTTP logs).
@@ -41,7 +41,12 @@ phases 1 to 4.
     login and token reuse, re-authentication rules, commands, trips and
     smart charging. Also `CachedAPIClient`, the HTTP log sink and
     `RoomFakeVehicleStore`, which makes the test car's server state the app's
-    own vehicle row, as on iOS.
+    own vehicle row, as on iOS. `AccountSetup` signs an account in (the test
+    account with its test cars) and `RemoteAction` sends a command and waits
+    for the car, for the phone, its widgets and the watch alike;
+    `AccountHandoff` is the format and merge rules of the accounts the phone
+    sends the watch.
+  - `model/VehicleImageURLs`: the car renders iOS shows, by model and colour.
   - `backup/`: `.ghostbluebackup` files in exactly the iOS format, so a backup
     moves between an iPhone and an Android phone in either direction.
 - **`bbcli/`**: command-line tool, the Kotlin counterpart of BetterBlueKit's
@@ -91,6 +96,8 @@ phases 1 to 4.
     channels, with iOS's switch and quiet hours; a charging notification
     kept current while a car charges (iOS's Live Activity, behind the same
     beta switch).
+  - `watch/`: sends the phone's accounts to the watch over the Wearable Data
+    Layer whenever they change.
 
   Where Android differs from iOS: smart charging posts what it changed
   (iOS shows it only in Shortcuts); widget and tile commands wait for the
@@ -103,6 +110,31 @@ phases 1 to 4.
   planner, the rest of the ownership hub (maintenance reminders are kept
   and notified, but not edited), the test-car editor, the verification-code
   (MFA) prompt, Face ID lock, troubleshooting and the debug export.
+
+- **`wear/`**: the Wear OS app (Wear Compose Material 3, wallpaper colours or
+  the Rivian look), a port of `GhostBlueWatch Watch App`. The watch has its own
+  database and talks to the vehicle service itself, as iOS's watch app does.
+  - `ui/`: a page per car, swiped sideways, with the charge, range and when it
+    last updated, refresh, the car's render, and lock, climate and (when
+    plugged in) charging buttons that send, wait for the car and stop waiting
+    on a second tap; settings for kilometres, the Rivian look and each car's
+    colour; sign-in on the watch (the test account in one tap, or a Hyundai
+    account typed on the watch); help.
+  - `tile/`: a tile for the car last shown, with its charge, range and state,
+    lock and climate buttons that show their progress, and refresh.
+  - `complication/`: iOS's battery-and-range complication as a ranged value
+    (a ring on faces that draw one), short text or long text; tapping it
+    opens that car.
+  - `handoff/`: receives the phone's accounts, even with the watch app closed,
+    and signs in the new ones. Known accounts take the phone's password and
+    PIN; nothing on the watch is deleted because the phone dropped it.
+
+  Where the watch differs from iOS: iOS's watch reads the iPhone's accounts
+  and gets its units, look and car colours over WatchConnectivity. Android's
+  watch can also sign in by itself, and keeps its own units, look and colours.
+  The Data Layer carries the accounts' passwords, PINs and refresh tokens; it's encrypted
+  between paired devices and only reaches an app with the same package name
+  and signing key, and the watch stores them as the phone does.
 
 Not ported yet: Kia USA, Hyundai Canada and Europe, and MFA. The factory
 reports these as not yet supported; unlike iOS, which falls back to the test
@@ -127,7 +159,7 @@ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 ```
 
 ```bash
-./gradlew :betterbluekit:test :data:testDebugUnitTest :app:testDebugUnitTest :app:assembleDebug
+./gradlew :betterbluekit:test :data:testDebugUnitTest :app:testDebugUnitTest :wear:testDebugUnitTest :app:assembleDebug :wear:assembleDebug
 ```
 
 The `data` tests run Room under Robolectric, so they need no emulator. So do
@@ -139,6 +171,9 @@ at a Pixel Fold's inner-screen size, the screens' ported rules, and phase
 include ports of the iOS suites (EnergySessionAccuracy, ChargingReliability,
 SmartChargingAutomation, WakeUpReduction, BackupArchive, BackupTransfer,
 VehicleArchive, OwnershipFeature) with the smart-charging waits on virtual time.
+The `wear` tests run the watch app the same way on a round watch screen
+(signing in with the test account, lock, settings) and check the tile and
+complication content.
 
 ### Google Maps
 
@@ -157,6 +192,25 @@ Navigate still works.
 `GhostBlue_Pixel_9` and `GhostBlue_Pixel_9_Pro_Fold` (Android 16, Google
 APIs) run the app. Give them the host GPU (`hw.gpu.mode=host`) and 4 GB of
 RAM; with software rendering every frame takes seconds.
+
+`GhostBlue_Wear_Round` (Wear OS 6, round) runs the watch app. With a phone
+also connected, give adb the emulator's serial (`-s emulator-5554`, or
+`ANDROID_SERIAL` for Gradle). To add the tile and a complication without
+tapping through the watch:
+
+```bash
+adb shell am broadcast -a com.google.android.wearable.app.DEBUG_SURFACE --es operation add-tile --ecn component com.saivenkatkrishna.ghostblue/com.saivenkatkrishna.ghostblue.wear.tile.VehicleTileService
+```
+
+```bash
+adb shell am broadcast -a com.google.android.wearable.app.DEBUG_SURFACE --es operation set-complication --ecn component com.saivenkatkrishna.ghostblue/com.saivenkatkrishna.ghostblue.wear.complication.VehicleComplicationService --ecn watchface com.google.android.wearable.watchface.rwf/com.google.android.wearable.watchface.athletica.AthleticaWatchFaceService --ei slot 0 --ei type 5
+```
+
+(Type 5 is the ranged value, 3 short text, 4 long text. The default face has
+no slots switched on; `--es operation set-watchface --ecn component …` picks
+another.) The phone-to-watch handoff needs the two paired, which takes a
+phone image with the Play Store and the Pixel Watch app; these emulators
+don't have that, so it's covered by the `data` tests only.
 
 ## Try it with your car
 

@@ -27,4 +27,5 @@ rootProject.name = "GhostBlue"
 // and, later, widgets and Wear OS.
 // bbcli: command-line tool for trying the API against a real account.
 // app: the Android app.
-include(":betterbluekit", ":data", ":bbcli", ":app")
+// wear: the Wear OS app, on its own or with the account from the phone.
+include(":betterbluekit", ":data", ":bbcli", ":app", ":wear")

@@ -9,7 +9,7 @@ import android.service.quicksettings.TileService
 import com.saivenkatkrishna.ghostblue.GhostBlueApplication
 import com.saivenkatkrishna.ghostblue.R
 import com.saivenkatkrishna.ghostblue.background.CommandWorker
-import com.saivenkatkrishna.ghostblue.background.RemoteAction
+import com.saivenkatkrishna.ghostblue.data.account.RemoteAction
 import com.saivenkatkrishna.ghostblue.data.model.BBVehicle
 import com.saivenkatkrishna.ghostblue.kit.model.VehicleStatus
 import kotlinx.coroutines.Dispatchers

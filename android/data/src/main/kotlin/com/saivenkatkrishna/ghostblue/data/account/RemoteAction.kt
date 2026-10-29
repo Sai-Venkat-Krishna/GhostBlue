@@ -1,10 +1,9 @@
-package com.saivenkatkrishna.ghostblue.background
+package com.saivenkatkrishna.ghostblue.data.account
 
-import com.saivenkatkrishna.ghostblue.data.account.AccountController
 import com.saivenkatkrishna.ghostblue.kit.model.APIError
 import com.saivenkatkrishna.ghostblue.kit.model.VehicleStatus
 
-/** The commands widgets, tiles and notifications can send, as iOS's App Intents do. */
+/** The commands widgets, tiles, the watch and notifications can send, as iOS's App Intents do. */
 enum class RemoteAction(val title: String, val progress: String, val done: String) {
     LOCK("Lock", "Locking", "Locked"),
     UNLOCK("Unlock", "Unlocking", "Unlocked"),

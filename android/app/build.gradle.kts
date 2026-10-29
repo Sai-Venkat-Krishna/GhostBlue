@@ -89,6 +89,9 @@ dependencies {
     implementation(libs.glance.appwidget)
     implementation(libs.glance.material3)
     implementation(libs.work.runtime)
+    // Hands the account to the watch app over the Data Layer.
+    implementation(libs.play.services.wearable)
+    implementation(libs.kotlinx.coroutines.play.services)
 
     // Compose UI tests run under Robolectric, so they need no emulator.
     testImplementation(libs.junit4)

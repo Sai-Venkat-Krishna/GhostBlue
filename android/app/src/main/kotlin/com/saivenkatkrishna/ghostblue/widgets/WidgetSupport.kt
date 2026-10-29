@@ -20,7 +20,7 @@ import com.saivenkatkrishna.ghostblue.GhostBlueApplication
 import com.saivenkatkrishna.ghostblue.MainActivity
 import com.saivenkatkrishna.ghostblue.background.CommandWorker
 import com.saivenkatkrishna.ghostblue.background.RefreshWorker
-import com.saivenkatkrishna.ghostblue.background.RemoteAction
+import com.saivenkatkrishna.ghostblue.data.account.RemoteAction
 import com.saivenkatkrishna.ghostblue.data.charging.vehicleSampleDate
 import com.saivenkatkrishna.ghostblue.data.model.BBVehicle
 import com.saivenkatkrishna.ghostblue.kit.model.Distance

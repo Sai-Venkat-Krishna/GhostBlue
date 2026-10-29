@@ -28,27 +28,15 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImagePainter
 import coil3.compose.AsyncImage
 import com.saivenkatkrishna.ghostblue.data.model.VehicleImageColor
+import com.saivenkatkrishna.ghostblue.data.model.VehicleImageURLs
 
-/** The renders the iOS app shows: one side view per model and paint colour. */
+/** The car renders (from the data layer) and the paint picker's swatches. */
 object VehicleImages {
-    // First match wins, so the longer names come first.
-    private val modelImageKeys = listOf(
-        "ioniq5n" to "ioniq5n", "ioniq5" to "ioniq5", "ioniq6" to "ioniq6", "ioniq9" to "ioniq9",
-        "ioniq" to "ioniq", "ev6" to "ev6", "ev9" to "ev9", "kona" to "kona", "niro" to "niro",
-    )
+    const val ASPECT_RATIO = VehicleImageURLs.ASPECT_RATIO
 
-    /** Width over height of a render, before one has loaded. */
-    const val ASPECT_RATIO = 400f / 157f
+    fun modelKey(modelName: String): String = VehicleImageURLs.modelKey(modelName)
 
-    fun modelKey(modelName: String): String {
-        val normalized = modelName.replace(Regex("""^\d{4}\s+"""), "")
-            .lowercase().replace(" ", "").replace("-", "")
-        return modelImageKeys.firstOrNull { normalized.contains(it.first) }?.second ?: "ioniq5"
-    }
-
-    /** Same URL as iOS's `HomeVehicleImageView`, double slash included. */
-    fun url(modelName: String, color: VehicleImageColor): String =
-        "https://bluelink.andyfase.com/app-assets/car-images//${modelKey(modelName)}/${color.rawValue}.png"
+    fun url(modelName: String, color: VehicleImageColor): String = VehicleImageURLs.url(modelName, color)
 
     /** Swatch colours for the paint picker, from iOS's Vehicle Center. */
     fun swatch(color: VehicleImageColor): Color = when (color) {

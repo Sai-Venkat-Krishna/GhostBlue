@@ -3,6 +3,7 @@ package com.saivenkatkrishna.ghostblue.ui
 import androidx.room.withTransaction
 import com.saivenkatkrishna.ghostblue.data.account.AccountController
 import com.saivenkatkrishna.ghostblue.data.account.AccountControllers
+import com.saivenkatkrishna.ghostblue.data.account.AccountSetup
 import com.saivenkatkrishna.ghostblue.data.account.createAPIClient
 import com.saivenkatkrishna.ghostblue.kit.api.APIClientConfiguration
 import com.saivenkatkrishna.ghostblue.data.backup.BackupArchive
@@ -449,24 +450,17 @@ class GarageModel(
         region: Region,
         testCars: List<FakeVehicleRecord>,
     ): UserError? {
-        val effectiveBrand = if (isTestAccount(username, password)) Brand.FAKE else brand
-        val account = BBAccount(username.trim(), password, pin, effectiveBrand, region)
-        db.accounts().insert(account)
-        try {
-            if (effectiveBrand == Brand.FAKE) addTestCars(account.id, testCars)
-            val controller = controllers.controller(account.id)
-            controller.initialize()
-            controller.loadVehicles()
+        val effectiveBrand = AccountSetup.effectiveBrand(username, password, brand)
+        return try {
+            val account = AccountSetup.addAccount(db, controllers, username, password, pin, brand, region, testCars)
             db.vehicles().ownedBy(account.id).firstOrNull()?.let { settings.setSelectedVin(it.vin) }
             _lastError.value = null
             for (vehicle in db.vehicles().ownedBy(account.id)) refresh(vehicle.vin, forced = false)
-            return null
+            null
         } catch (error: CancellationException) {
-            withContext(NonCancellable) { forgetAccount(account) }
             throw error
         } catch (error: Exception) {
-            forgetAccount(account)
-            return if (error.isMFA) {
+            if (error.isMFA) {
                 UserError(
                     "Sign in to ${effectiveBrand.displayName}",
                     "This account asks for a verification code, which the Android app doesn't support yet.",
@@ -479,36 +473,7 @@ class GarageModel(
         }
     }
 
-    private suspend fun addTestCars(accountId: UUID, cars: List<FakeVehicleRecord>) {
-        db.withTransaction {
-            for ((index, record) in cars.withIndex()) {
-                val vehicle = BBVehicle(record.vehicle.copy(accountId = accountId)).apply {
-                    ownerAccountId = accountId
-                    sortOrder = index
-                    evStatus = record.evStatus
-                    gasRange = record.gasRange
-                    location = record.location
-                    lockStatus = record.lockStatus
-                    climateStatus = record.climateStatus
-                    battery12V = record.battery12V ?: 82
-                    doorOpen = record.doorOpen
-                    trunkOpen = record.trunkOpen
-                    hoodOpen = record.hoodOpen
-                    tirePressureWarning = record.tirePressureWarning
-                    syncDate = record.syncDate
-                    lastUpdated = record.lastUpdated
-                    backgroundColorName = if (index % 2 == 0) "darkBlue" else "darkGreen"
-                }
-                // A VIN is unique; a test car already stored elsewhere stays there.
-                if (db.vehicles().byVin(vehicle.vin) == null) db.vehicles().insert(vehicle)
-            }
-        }
-    }
-
-    private suspend fun forgetAccount(account: BBAccount) {
-        AccountController.removeAccount(account, db)
-        controllers.forget(account.id)
-    }
+    private suspend fun forgetAccount(account: BBAccount) = AccountSetup.forget(db, controllers, account)
 
     /**
      * New credentials are tried with a sign-in of their own before they're

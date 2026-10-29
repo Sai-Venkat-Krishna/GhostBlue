@@ -21,6 +21,7 @@ import com.saivenkatkrishna.ghostblue.data.vehicle.VehicleStatusEvents
 import com.saivenkatkrishna.ghostblue.notifications.ChargingProgress
 import com.saivenkatkrishna.ghostblue.notifications.Notifier
 import com.saivenkatkrishna.ghostblue.ui.GarageModel
+import com.saivenkatkrishna.ghostblue.watch.WatchHandoff
 import com.saivenkatkrishna.ghostblue.widgets.ChargeDialWidget
 import com.saivenkatkrishna.ghostblue.widgets.VehicleTiles
 import com.saivenkatkrishna.ghostblue.widgets.VehicleWidget
@@ -79,6 +80,7 @@ class AppGraph(
     fun startBackgroundWork() {
         notifier.createChannels()
         VehicleAlerts.sink = notifier
+        WatchHandoff.start(context, db, scope)
         scope.launch {
             VehicleStatusEvents.statusUpdated.collect { vin -> chargingProgress.update(vin) }
         }

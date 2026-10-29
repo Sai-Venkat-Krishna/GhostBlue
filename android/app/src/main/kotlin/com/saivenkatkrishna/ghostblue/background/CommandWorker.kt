@@ -1,6 +1,9 @@
 package com.saivenkatkrishna.ghostblue.background
 
 import android.content.Context
+import com.saivenkatkrishna.ghostblue.data.account.RemoteAction
+import com.saivenkatkrishna.ghostblue.data.account.isUnconfirmed
+import com.saivenkatkrishna.ghostblue.data.account.perform
 import android.content.pm.ServiceInfo
 import android.os.Build
 import androidx.core.app.NotificationCompat

@@ -51,7 +51,7 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import com.saivenkatkrishna.ghostblue.GhostBlueApplication
 import com.saivenkatkrishna.ghostblue.R
-import com.saivenkatkrishna.ghostblue.background.RemoteAction
+import com.saivenkatkrishna.ghostblue.data.account.RemoteAction
 import com.saivenkatkrishna.ghostblue.data.model.BBVehicle
 import com.saivenkatkrishna.ghostblue.settings.AppTheme
 import com.saivenkatkrishna.ghostblue.ui.theme.RivianDarkColors

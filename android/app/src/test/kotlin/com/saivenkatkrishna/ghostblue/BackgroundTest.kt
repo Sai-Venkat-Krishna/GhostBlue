@@ -16,7 +16,7 @@ import com.saivenkatkrishna.ghostblue.background.CommandWorker
 import com.saivenkatkrishna.ghostblue.background.DueReminder
 import com.saivenkatkrishna.ghostblue.background.ReminderScheduler
 import com.saivenkatkrishna.ghostblue.background.RefreshWorker
-import com.saivenkatkrishna.ghostblue.background.RemoteAction
+import com.saivenkatkrishna.ghostblue.data.account.RemoteAction
 import com.saivenkatkrishna.ghostblue.background.SmartChargingScheduler
 import com.saivenkatkrishna.ghostblue.background.SmartChargingWorker
 import com.saivenkatkrishna.ghostblue.data.charging.SDGESmartChargingSchedule
