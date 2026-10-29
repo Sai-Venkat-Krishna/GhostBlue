@@ -14,6 +14,7 @@ import com.saivenkatkrishna.ghostblue.kit.model.VehicleCommand
 import com.saivenkatkrishna.ghostblue.kit.model.VehicleStatus.LockStatus
 import com.saivenkatkrishna.ghostblue.kit.model.VehicleStatus.PlugType
 import java.time.Instant
+import java.time.ZoneId
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -26,7 +27,8 @@ import org.junit.jupiter.api.BeforeEach
 
 /** The test car: seeds, commands, failure switches and the charging simulation. */
 class FakeAPIClientTest {
-    private var now = Instant.parse("2026-10-28T02:00:00Z")
+    private var now = Instant.parse("2026-10-28T02:00:00Z") // 7 PM on Oct 27 in Los Angeles
+    private val losAngeles = ZoneId.of("America/Los_Angeles")
     private lateinit var store: InMemoryFakeVehicleStore
     private lateinit var client: FakeAPIClient
 
@@ -37,6 +39,7 @@ class FakeAPIClientTest {
         client = FakeAPIClient(
             configuration(brand = Brand.FAKE),
             StoreFakeVehicleProvider(store) { now },
+            zone = { losAngeles },
         ) { now }
     }
 
@@ -200,10 +203,30 @@ class FakeAPIClientTest {
         val vehicles = vehicles()
         val trips = requireNotNull(client.fetchEVTripDetails(vehicles[0], token))
         assertEquals(7, trips.size)
-        assertEquals(now.minusSeconds(24 * 3600), trips[0].startDate)
+        assertEquals(Instant.parse("2026-10-26T15:00:00Z"), trips[0].startDate) // 8 AM the day before
+        assertEquals(Instant.parse("2026-10-20T17:00:00Z"), trips[6].startDate) // 10 AM a week back
         assertEquals(12_345.0 + trips.drop(1).sumOf { it.distance }, trips[0].odometer, 1e-9)
         assertEquals(358, trips[0].accessoriesEnergy)
         assertNull(client.fetchEVTripDetails(vehicles[1], token))
+    }
+
+    @Test
+    fun `synthetic trips are the same on every fetch until the day changes`() = runTest {
+        val token = client.login()
+        val ioniq = ioniq()
+        // The app's trip archive keys trips by VIN, whole start second and odometer.
+        suspend fun keys() = requireNotNull(client.fetchEVTripDetails(ioniq, token))
+            .map { "${ioniq.vin}-${it.startDate.epochSecond}-${it.odometer}" }
+
+        val first = keys()
+        assertEquals(first, keys())
+        now = now.plusSeconds(4 * 3600) // 11 PM, still Oct 27
+        assertEquals(first, keys())
+
+        now = now.plusSeconds(2 * 3600) // 1 AM on Oct 28
+        val nextDay = requireNotNull(client.fetchEVTripDetails(ioniq, token))
+        assertEquals(Instant.parse("2026-10-27T15:00:00Z"), nextDay[0].startDate)
+        assertTrue(nextDay.map { "${ioniq.vin}-${it.startDate.epochSecond}-${it.odometer}" }.none { it in first })
     }
 
     @Test
