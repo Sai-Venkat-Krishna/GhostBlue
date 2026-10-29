@@ -1,0 +1,1250 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "a6f984de2fe3bbf0122f1ea084ddcdb5",
+    "entities": [
+      {
+        "tableName": "accounts",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `username` TEXT NOT NULL, `password` TEXT NOT NULL, `refreshToken` TEXT NOT NULL, `pin` TEXT NOT NULL, `brand` TEXT NOT NULL, `region` TEXT NOT NULL, `dateCreated` INTEGER NOT NULL, `rememberMeToken` TEXT, `serializedAuthToken` TEXT, `deviceId` TEXT, `lastVehiclesFetch` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "username",
+            "columnName": "username",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "password",
+            "columnName": "password",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "refreshToken",
+            "columnName": "refreshToken",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pin",
+            "columnName": "pin",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "brand",
+            "columnName": "brand",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "region",
+            "columnName": "region",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dateCreated",
+            "columnName": "dateCreated",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rememberMeToken",
+            "columnName": "rememberMeToken",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "serializedAuthToken",
+            "columnName": "serializedAuthToken",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "deviceId",
+            "columnName": "deviceId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastVehiclesFetch",
+            "columnName": "lastVehiclesFetch",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "vehicles",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `vin` TEXT NOT NULL, `regId` TEXT NOT NULL, `model` TEXT NOT NULL, `accountId` TEXT NOT NULL, `ownerAccountId` TEXT, `fuelTypeRaw` TEXT NOT NULL, `generation` INTEGER NOT NULL, `odometer` TEXT NOT NULL, `lastUpdated` INTEGER, `syncDate` INTEGER, `gasRange` TEXT, `evStatus` TEXT, `pendingChargingStopDate` INTEGER, `pendingChargingStopObservedAt` INTEGER, `chargeStopRequestedAt` INTEGER, `location` TEXT, `lockStatus` TEXT, `climateStatus` TEXT, `battery12V` INTEGER, `doorOpen` TEXT, `trunkOpen` INTEGER, `hoodOpen` INTEGER, `tirePressureWarning` TEXT, `customName` TEXT, `isHidden` INTEGER NOT NULL, `sortOrder` INTEGER NOT NULL, `backgroundColorName` TEXT NOT NULL, `watchBackgroundColorName` TEXT NOT NULL, `vehicleImageColorRaw` TEXT NOT NULL, `chargePortTypeRaw` TEXT NOT NULL, `batteryCapacityKWh` REAL, `electricityRatePerKWh` REAL, `offPeakElectricityRatePerKWh` REAL, `dcFastChargingRatePerKWh` REAL, `peakElectricityRatePerKWh` REAL, `offPeakStartHour` INTEGER NOT NULL, `offPeakEndHour` INTEGER NOT NULL, `monthlyChargingBudget` REAL, `homeLatitude` REAL, `homeLongitude` REAL, `homePrivacyRadiusMeters` REAL NOT NULL, `smartChargingEnabled` INTEGER NOT NULL, `smartChargingHomeOnly` INTEGER NOT NULL, `smartChargingTargetSOC` INTEGER NOT NULL, `smartChargingLastRunAt` INTEGER, `smartChargingLastResult` TEXT, `smartChargingLastConfirmedAt` INTEGER, `smartChargingOverrideRaw` TEXT, `smartChargingOverrideExpiresAt` INTEGER, `notifyChargeComplete` INTEGER NOT NULL, `notifyChargeInterrupted` INTEGER NOT NULL, `notifyUnlocked` INTEGER NOT NULL, `notifyOpenPanels` INTEGER NOT NULL, `notifyLowEVBattery` INTEGER NOT NULL, `notifyLow12VBattery` INTEGER NOT NULL, `notifyTirePressure` INTEGER NOT NULL, `lowEVBatteryThreshold` INTEGER NOT NULL, `low12VBatteryThreshold` INTEGER NOT NULL, `alertSnapshotData` TEXT, `lastTripArchiveAttemptDate` INTEGER, `debugConfiguration` TEXT, `debugLiveActivity` INTEGER NOT NULL, `enableSeatHeatControls` INTEGER NOT NULL, `showClimateDurationOverride` INTEGER, `fuelTypeOverrideRaw` TEXT, `abrpUserToken` TEXT, `abrpCarModel` TEXT, `primaryColorName` TEXT, `chargingColorName` TEXT, `gasColorName` TEXT, `lockColorName` TEXT, `unlockColorName` TEXT, `startClimateColorName` TEXT, `stopColorName` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`ownerAccountId`) REFERENCES `accounts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vin",
+            "columnName": "vin",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "regId",
+            "columnName": "regId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "model",
+            "columnName": "model",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "accountId",
+            "columnName": "accountId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ownerAccountId",
+            "columnName": "ownerAccountId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "fuelTypeRaw",
+            "columnName": "fuelTypeRaw",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "generation",
+            "columnName": "generation",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "odometer",
+            "columnName": "odometer",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastUpdated",
+            "columnName": "lastUpdated",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "syncDate",
+            "columnName": "syncDate",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "gasRange",
+            "columnName": "gasRange",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "evStatus",
+            "columnName": "evStatus",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "pendingChargingStopDate",
+            "columnName": "pendingChargingStopDate",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "pendingChargingStopObservedAt",
+            "columnName": "pendingChargingStopObservedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "chargeStopRequestedAt",
+            "columnName": "chargeStopRequestedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "location",
+            "columnName": "location",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lockStatus",
+            "columnName": "lockStatus",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "climateStatus",
+            "columnName": "climateStatus",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "battery12V",
+            "columnName": "battery12V",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "doorOpen",
+            "columnName": "doorOpen",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "trunkOpen",
+            "columnName": "trunkOpen",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "hoodOpen",
+            "columnName": "hoodOpen",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "tirePressureWarning",
+            "columnName": "tirePressureWarning",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "customName",
+            "columnName": "customName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isHidden",
+            "columnName": "isHidden",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sortOrder",
+            "columnName": "sortOrder",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "backgroundColorName",
+            "columnName": "backgroundColorName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "watchBackgroundColorName",
+            "columnName": "watchBackgroundColorName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vehicleImageColorRaw",
+            "columnName": "vehicleImageColorRaw",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "chargePortTypeRaw",
+            "columnName": "chargePortTypeRaw",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "batteryCapacityKWh",
+            "columnName": "batteryCapacityKWh",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "electricityRatePerKWh",
+            "columnName": "electricityRatePerKWh",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "offPeakElectricityRatePerKWh",
+            "columnName": "offPeakElectricityRatePerKWh",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "dcFastChargingRatePerKWh",
+            "columnName": "dcFastChargingRatePerKWh",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "peakElectricityRatePerKWh",
+            "columnName": "peakElectricityRatePerKWh",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "offPeakStartHour",
+            "columnName": "offPeakStartHour",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "offPeakEndHour",
+            "columnName": "offPeakEndHour",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "monthlyChargingBudget",
+            "columnName": "monthlyChargingBudget",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "homeLatitude",
+            "columnName": "homeLatitude",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "homeLongitude",
+            "columnName": "homeLongitude",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "homePrivacyRadiusMeters",
+            "columnName": "homePrivacyRadiusMeters",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "smartChargingEnabled",
+            "columnName": "smartChargingEnabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "smartChargingHomeOnly",
+            "columnName": "smartChargingHomeOnly",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "smartChargingTargetSOC",
+            "columnName": "smartChargingTargetSOC",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "smartChargingLastRunAt",
+            "columnName": "smartChargingLastRunAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "smartChargingLastResult",
+            "columnName": "smartChargingLastResult",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "smartChargingLastConfirmedAt",
+            "columnName": "smartChargingLastConfirmedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "smartChargingOverrideRaw",
+            "columnName": "smartChargingOverrideRaw",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "smartChargingOverrideExpiresAt",
+            "columnName": "smartChargingOverrideExpiresAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "notifyChargeComplete",
+            "columnName": "notifyChargeComplete",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notifyChargeInterrupted",
+            "columnName": "notifyChargeInterrupted",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notifyUnlocked",
+            "columnName": "notifyUnlocked",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notifyOpenPanels",
+            "columnName": "notifyOpenPanels",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notifyLowEVBattery",
+            "columnName": "notifyLowEVBattery",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notifyLow12VBattery",
+            "columnName": "notifyLow12VBattery",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notifyTirePressure",
+            "columnName": "notifyTirePressure",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lowEVBatteryThreshold",
+            "columnName": "lowEVBatteryThreshold",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "low12VBatteryThreshold",
+            "columnName": "low12VBatteryThreshold",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "alertSnapshotData",
+            "columnName": "alertSnapshotData",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastTripArchiveAttemptDate",
+            "columnName": "lastTripArchiveAttemptDate",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "debugConfiguration",
+            "columnName": "debugConfiguration",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "debugLiveActivity",
+            "columnName": "debugLiveActivity",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "enableSeatHeatControls",
+            "columnName": "enableSeatHeatControls",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "showClimateDurationOverride",
+            "columnName": "showClimateDurationOverride",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "fuelTypeOverrideRaw",
+            "columnName": "fuelTypeOverrideRaw",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "abrpUserToken",
+            "columnName": "abrpUserToken",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "abrpCarModel",
+            "columnName": "abrpCarModel",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "primaryColorName",
+            "columnName": "primaryColorName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "chargingColorName",
+            "columnName": "chargingColorName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "gasColorName",
+            "columnName": "gasColorName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lockColorName",
+            "columnName": "lockColorName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "unlockColorName",
+            "columnName": "unlockColorName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "startClimateColorName",
+            "columnName": "startClimateColorName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "stopColorName",
+            "columnName": "stopColorName",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_vehicles_vin",
+            "unique": true,
+            "columnNames": [
+              "vin"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_vehicles_vin` ON `${TABLE_NAME}` (`vin`)"
+          },
+          {
+            "name": "index_vehicles_ownerAccountId",
+            "unique": false,
+            "columnNames": [
+              "ownerAccountId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_vehicles_ownerAccountId` ON `${TABLE_NAME}` (`ownerAccountId`)"
+          },
+          {
+            "name": "index_vehicles_accountId",
+            "unique": false,
+            "columnNames": [
+              "accountId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_vehicles_accountId` ON `${TABLE_NAME}` (`accountId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "accounts",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "ownerAccountId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "climate_presets",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `iconName` TEXT NOT NULL, `climateOptions` TEXT NOT NULL, `isSelected` INTEGER NOT NULL, `sortOrder` INTEGER NOT NULL, `vehicleId` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`vehicleId`) REFERENCES `vehicles`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "iconName",
+            "columnName": "iconName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "climateOptions",
+            "columnName": "climateOptions",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isSelected",
+            "columnName": "isSelected",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sortOrder",
+            "columnName": "sortOrder",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vehicleId",
+            "columnName": "vehicleId",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_climate_presets_vehicleId",
+            "unique": false,
+            "columnNames": [
+              "vehicleId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_climate_presets_vehicleId` ON `${TABLE_NAME}` (`vehicleId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "vehicles",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "vehicleId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "charge_sessions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `vin` TEXT NOT NULL, `startDate` INTEGER NOT NULL, `endDate` INTEGER, `startPercentage` REAL NOT NULL, `endPercentage` REAL NOT NULL, `energyAddedKWh` REAL NOT NULL, `maxChargeSpeedKW` REAL NOT NULL, `isDCFast` INTEGER NOT NULL, `lastSampleDate` INTEGER NOT NULL, `pendingStopDate` INTEGER, `pendingStopObservedAt` INTEGER, `pendingStopPercentage` REAL, `latitude` REAL, `longitude` REAL, `locationTypeRaw` TEXT NOT NULL, `locationName` TEXT, `electricityRatePerKWh` REAL, `actualCost` REAL, `manualEnergyKWh` REAL, `tariff` TEXT, `rateWasLocationAware` INTEGER NOT NULL, `speedSamples` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vin",
+            "columnName": "vin",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startDate",
+            "columnName": "startDate",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endDate",
+            "columnName": "endDate",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "startPercentage",
+            "columnName": "startPercentage",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endPercentage",
+            "columnName": "endPercentage",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "energyAddedKWh",
+            "columnName": "energyAddedKWh",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "maxChargeSpeedKW",
+            "columnName": "maxChargeSpeedKW",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isDCFast",
+            "columnName": "isDCFast",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastSampleDate",
+            "columnName": "lastSampleDate",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pendingStopDate",
+            "columnName": "pendingStopDate",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "pendingStopObservedAt",
+            "columnName": "pendingStopObservedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "pendingStopPercentage",
+            "columnName": "pendingStopPercentage",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "latitude",
+            "columnName": "latitude",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "longitude",
+            "columnName": "longitude",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "locationTypeRaw",
+            "columnName": "locationTypeRaw",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "locationName",
+            "columnName": "locationName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "electricityRatePerKWh",
+            "columnName": "electricityRatePerKWh",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "actualCost",
+            "columnName": "actualCost",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "manualEnergyKWh",
+            "columnName": "manualEnergyKWh",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "tariff",
+            "columnName": "tariff",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "rateWasLocationAware",
+            "columnName": "rateWasLocationAware",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "speedSamples",
+            "columnName": "speedSamples",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_charge_sessions_vin",
+            "unique": false,
+            "columnNames": [
+              "vin"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_charge_sessions_vin` ON `${TABLE_NAME}` (`vin`)"
+          },
+          {
+            "name": "index_charge_sessions_startDate",
+            "unique": false,
+            "columnNames": [
+              "startDate"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_charge_sessions_startDate` ON `${TABLE_NAME}` (`startDate`)"
+          }
+        ]
+      },
+      {
+        "tableName": "trips",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `vin` TEXT NOT NULL, `tripKey` TEXT NOT NULL, `distance` REAL NOT NULL, `odometer` REAL NOT NULL, `accessoriesEnergy` INTEGER NOT NULL, `totalEnergyUsed` INTEGER NOT NULL, `regenEnergy` INTEGER NOT NULL, `climateEnergy` INTEGER NOT NULL, `drivetrainEnergy` INTEGER NOT NULL, `batteryCareEnergy` INTEGER NOT NULL, `startDate` INTEGER NOT NULL, `durationSeconds` INTEGER NOT NULL, `avgSpeed` REAL NOT NULL, `maxSpeed` REAL NOT NULL, `savedDate` INTEGER NOT NULL, `customName` TEXT, `isFavorite` INTEGER NOT NULL, `startLocationName` TEXT, `endLocationName` TEXT, `startLatitude` REAL, `startLongitude` REAL, `endLatitude` REAL, `endLongitude` REAL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vin",
+            "columnName": "vin",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tripKey",
+            "columnName": "tripKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "distance",
+            "columnName": "distance",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "odometer",
+            "columnName": "odometer",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "accessoriesEnergy",
+            "columnName": "accessoriesEnergy",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "totalEnergyUsed",
+            "columnName": "totalEnergyUsed",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "regenEnergy",
+            "columnName": "regenEnergy",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "climateEnergy",
+            "columnName": "climateEnergy",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "drivetrainEnergy",
+            "columnName": "drivetrainEnergy",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "batteryCareEnergy",
+            "columnName": "batteryCareEnergy",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startDate",
+            "columnName": "startDate",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "durationSeconds",
+            "columnName": "durationSeconds",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "avgSpeed",
+            "columnName": "avgSpeed",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "maxSpeed",
+            "columnName": "maxSpeed",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "savedDate",
+            "columnName": "savedDate",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "customName",
+            "columnName": "customName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isFavorite",
+            "columnName": "isFavorite",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startLocationName",
+            "columnName": "startLocationName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "endLocationName",
+            "columnName": "endLocationName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "startLatitude",
+            "columnName": "startLatitude",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "startLongitude",
+            "columnName": "startLongitude",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "endLatitude",
+            "columnName": "endLatitude",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "endLongitude",
+            "columnName": "endLongitude",
+            "affinity": "REAL"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_trips_vin_tripKey",
+            "unique": false,
+            "columnNames": [
+              "vin",
+              "tripKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_trips_vin_tripKey` ON `${TABLE_NAME}` (`vin`, `tripKey`)"
+          },
+          {
+            "name": "index_trips_startDate",
+            "unique": false,
+            "columnNames": [
+              "startDate"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_trips_startDate` ON `${TABLE_NAME}` (`startDate`)"
+          }
+        ]
+      },
+      {
+        "tableName": "remote_commands",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `vin` TEXT NOT NULL, `vehicleName` TEXT NOT NULL, `commandName` TEXT NOT NULL, `sourceName` TEXT NOT NULL, `stateRaw` TEXT NOT NULL, `startedAt` INTEGER NOT NULL, `completedAt` INTEGER, `errorMessage` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vin",
+            "columnName": "vin",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vehicleName",
+            "columnName": "vehicleName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "commandName",
+            "columnName": "commandName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceName",
+            "columnName": "sourceName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "stateRaw",
+            "columnName": "stateRaw",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedAt",
+            "columnName": "startedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "completedAt",
+            "columnName": "completedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "errorMessage",
+            "columnName": "errorMessage",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_remote_commands_vin",
+            "unique": false,
+            "columnNames": [
+              "vin"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_remote_commands_vin` ON `${TABLE_NAME}` (`vin`)"
+          },
+          {
+            "name": "index_remote_commands_startedAt",
+            "unique": false,
+            "columnNames": [
+              "startedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_remote_commands_startedAt` ON `${TABLE_NAME}` (`startedAt`)"
+          }
+        ]
+      },
+      {
+        "tableName": "maintenance_reminders",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `vin` TEXT NOT NULL, `title` TEXT NOT NULL, `notes` TEXT NOT NULL, `dueDate` INTEGER, `dueOdometer` REAL, `cost` REAL, `createdAt` INTEGER NOT NULL, `completedAt` INTEGER, `lastNotifiedAt` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vin",
+            "columnName": "vin",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dueDate",
+            "columnName": "dueDate",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "dueOdometer",
+            "columnName": "dueOdometer",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "cost",
+            "columnName": "cost",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "completedAt",
+            "columnName": "completedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "lastNotifiedAt",
+            "columnName": "lastNotifiedAt",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_maintenance_reminders_vin",
+            "unique": false,
+            "columnNames": [
+              "vin"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_maintenance_reminders_vin` ON `${TABLE_NAME}` (`vin`)"
+          }
+        ]
+      },
+      {
+        "tableName": "automations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `vin` TEXT NOT NULL, `title` TEXT NOT NULL, `kindRaw` TEXT NOT NULL, `isEnabled` INTEGER NOT NULL, `threshold` INTEGER NOT NULL, `hour` INTEGER NOT NULL, `minute` INTEGER NOT NULL, `lastTriggeredAt` INTEGER, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vin",
+            "columnName": "vin",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kindRaw",
+            "columnName": "kindRaw",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isEnabled",
+            "columnName": "isEnabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "threshold",
+            "columnName": "threshold",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hour",
+            "columnName": "hour",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "minute",
+            "columnName": "minute",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastTriggeredAt",
+            "columnName": "lastTriggeredAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_automations_vin",
+            "unique": false,
+            "columnNames": [
+              "vin"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_automations_vin` ON `${TABLE_NAME}` (`vin`)"
+          }
+        ]
+      },
+      {
+        "tableName": "http_logs",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `log` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, `deviceTypeRaw` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "log",
+            "columnName": "log",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deviceTypeRaw",
+            "columnName": "deviceTypeRaw",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_http_logs_timestamp",
+            "unique": false,
+            "columnNames": [
+              "timestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_http_logs_timestamp` ON `${TABLE_NAME}` (`timestamp`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'a6f984de2fe3bbf0122f1ea084ddcdb5')"
+    ]
+  }
+}

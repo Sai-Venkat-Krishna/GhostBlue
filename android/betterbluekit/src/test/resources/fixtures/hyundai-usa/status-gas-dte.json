@@ -1,0 +1,12 @@
+{
+  "vehicleStatus": {
+    "dateTime": "2025-07-06T09:00:00-07:00",
+    "doorLock": false,
+    "airCtrlOn": true,
+    "airTemp": {"value": "68", "unit": 1},
+    "fuelLevel": "48",
+    "dte": {"value": 310, "unit": 3},
+    "hoodOpen": true,
+    "vehicleLocation": {"coord": {"lat": 37.7749, "lon": -122.4194}}
+  }
+}

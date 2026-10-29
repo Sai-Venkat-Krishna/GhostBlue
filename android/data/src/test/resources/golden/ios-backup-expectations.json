@@ -1,0 +1,33 @@
+{
+  "csv" : "Started (UTC),Ended (UTC),State,Start SOC (%),End SOC (%),Energy (kWh),Energy source,Cost,Cost source,Location,Charger\r\n\"2026-09-21T14:13:20Z\",\"2026-09-21T20:13:20Z\",\"Completed\",\"31.0\",\"80.0\",\"41.16\",\"Estimated from battery · 84 kWh\",\"8.559755555555554\",\"Estimated\",\"Home\",\"AC\"\r\n\"2026-09-24T03:03:20Z\",\"2026-09-24T04:03:20Z\",\"Completed\",\"18.0\",\"72.0\",\"46.1\",\"Measured · manual\",\"21.37\",\"Receipt\",\"Public DC\",\"DC\"\r\n\"2026-09-26T05:20:00Z\",\"2026-09-26T07:20:00Z\",\"Completed\",\"40.0\",\"52.0\",\"10.08\",\"Estimated from battery · 84 kWh\",\"3.1248\",\"Estimated\",\"Automatic\",\"AC\"\r\n\"2026-09-27T09:06:40Z\",\"\",\"In progress\",\"55.0\",\"62.5\",\"6.3\",\"Estimated from battery · 84 kWh\",\"0.756\",\"Estimated\",\"Automatic\",\"AC\"\r\n",
+  "sessions" : [
+    {
+      "chargingCost" : 8.5597555555555545,
+      "energyDelivered" : 41.159999999999997,
+      "energySource" : "Estimated from battery · 84 kWh",
+      "id" : "0A1B2C3D-0000-4000-8000-000000000031",
+      "isMeaningful" : true
+    },
+    {
+      "chargingCost" : 21.370000000000001,
+      "energyDelivered" : 46.100000000000001,
+      "energySource" : "Measured · manual",
+      "id" : "0A1B2C3D-0000-4000-8000-000000000032",
+      "isMeaningful" : true
+    },
+    {
+      "chargingCost" : 3.1248,
+      "energyDelivered" : 10.08,
+      "energySource" : "Estimated from battery · 84 kWh",
+      "id" : "0A1B2C3D-0000-4000-8000-000000000033",
+      "isMeaningful" : true
+    },
+    {
+      "chargingCost" : 0.75600000000000001,
+      "energyDelivered" : 6.2999999999999998,
+      "energySource" : "Estimated from battery · 84 kWh",
+      "id" : "0A1B2C3D-0000-4000-8000-000000000034",
+      "isMeaningful" : true
+    }
+  ]
+}

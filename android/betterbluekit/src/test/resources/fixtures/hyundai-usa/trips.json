@@ -1,0 +1,9 @@
+{
+  "tripdetails": [
+    {"distance": 28, "odometer": {"value": 12345.6, "unit": 3}, "accessories": 358, "totalused": 8950, "regen": 1140, "climate": 720, "drivetrain": 6950, "batterycare": 179, "startdate": "2025-07-05 08:12:33.0", "duration": {"value": 2700, "unit": 4}, "avgspeed": {"value": 37.4, "unit": 1}, "maxspeed": {"value": 55, "unit": 1}},
+    {"distance": 112, "odometer": {"value": 12500, "unit": 3}, "accessories": 1359, "totalused": 33980, "regen": 4120, "climate": 2140, "drivetrain": 26540, "batterycare": 679, "startdate": "2025-07-04 17:45:02.123", "duration": {"value": 9900}, "avgspeed": {"value": 40.9}, "maxspeed": {"value": 78.3}},
+    {"distance": 12.5, "odometer": {"value": 1}, "accessories": 1, "totalused": 1, "regen": 1, "climate": 1, "drivetrain": 1, "batterycare": 1, "startdate": "2025-07-03 08:00:00.0", "duration": {"value": 60}, "avgspeed": {"value": 1}, "maxspeed": {"value": 1}},
+    {"distance": 5, "odometer": {"value": 1}, "accessories": 1, "totalused": 1, "regen": 1, "climate": 1, "drivetrain": 1, "batterycare": 1, "startdate": "2025-07-03 08:00:00", "duration": {"value": 60}, "avgspeed": {"value": 1}, "maxspeed": {"value": 1}},
+    {"distance": 5, "odometer": {"value": 1}, "accessories": 1, "totalused": 1, "regen": 1, "climate": 1, "drivetrain": 1, "batterycare": 1, "startdate": "2025-07-03 08:00:00.0", "duration": {"value": 60}, "avgspeed": {"value": 1}}
+  ]
+}

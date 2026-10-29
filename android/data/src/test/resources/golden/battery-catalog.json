@@ -1,0 +1,1115 @@
+{
+  "capacities" : [
+    {
+      "fuelType" : "gas",
+      "kWh" : null,
+      "model" : "IONIQ 5"
+    },
+    {
+      "fuelType" : "electric",
+      "kWh" : 77.400000000000006,
+      "model" : "IONIQ 5"
+    },
+    {
+      "fuelType" : "phev",
+      "kWh" : null,
+      "model" : "IONIQ 5"
+    },
+    {
+      "fuelType" : "gas",
+      "kWh" : null,
+      "model" : "Hyundai IONIQ 5"
+    },
+    {
+      "fuelType" : "electric",
+      "kWh" : 77.400000000000006,
+      "model" : "Hyundai IONIQ 5"
+    },
+    {
+      "fuelType" : "phev",
+      "kWh" : null,
+      "model" : "Hyundai IONIQ 5"
+    },
+    {
+      "fuelType" : "gas",
+      "kWh" : null,
+      "model" : "2025 IONIQ 5"
+    },
+    {
+      "fuelType" : "electric",
+      "kWh" : 77.400000000000006,
+      "model" : "2025 IONIQ 5"
+    },
+    {
+      "fuelType" : "phev",
+      "kWh" : null,
+      "model" : "2025 IONIQ 5"
+    },
+    {
+      "fuelType" : "gas",
+      "kWh" : null,
+      "model" : "IONIQ 5 N"
+    },
+    {
+      "fuelType" : "electric",
+      "kWh" : 84,
+      "model" : "IONIQ 5 N"
+    },
+    {
+      "fuelType" : "phev",
+      "kWh" : null,
+      "model" : "IONIQ 5 N"
+    },
+    {
+      "fuelType" : "gas",
+      "kWh" : null,
+      "model" : "ioniq-5n"
+    },
+    {
+      "fuelType" : "electric",
+      "kWh" : 84,
+      "model" : "ioniq-5n"
+    },
+    {
+      "fuelType" : "phev",
+      "kWh" : null,
+      "model" : "ioniq-5n"
+    },
+    {
+      "fuelType" : "gas",
+      "kWh" : null,
+      "model" : "IONIQ_6"
+    },
+    {
+      "fuelType" : "electric",
+      "kWh" : 77.400000000000006,
+      "model" : "IONIQ_6"
+    },
+    {
+      "fuelType" : "phev",
+      "kWh" : null,
+      "model" : "IONIQ_6"
+    },
+    {
+      "fuelType" : "gas",
+      "kWh" : null,
+      "model" : "IONIQ 9"
+    },
+    {
+      "fuelType" : "electric",
+      "kWh" : 110.3,
+      "model" : "IONIQ 9"
+    },
+    {
+      "fuelType" : "phev",
+      "kWh" : null,
+      "model" : "IONIQ 9"
+    },
+    {
+      "fuelType" : "gas",
+      "kWh" : null,
+      "model" : "Ioniq Electric"
+    },
+    {
+      "fuelType" : "electric",
+      "kWh" : 38.299999999999997,
+      "model" : "Ioniq Electric"
+    },
+    {
+      "fuelType" : "phev",
+      "kWh" : null,
+      "model" : "Ioniq Electric"
+    },
+    {
+      "fuelType" : "gas",
+      "kWh" : null,
+      "model" : "EV9"
+    },
+    {
+      "fuelType" : "electric",
+      "kWh" : 99.799999999999997,
+      "model" : "EV9"
+    },
+    {
+      "fuelType" : "phev",
+      "kWh" : null,
+      "model" : "EV9"
+    },
+    {
+      "fuelType" : "gas",
+      "kWh" : null,
+      "model" : "EV6 GT"
+    },
+    {
+      "fuelType" : "electric",
+      "kWh" : 77.400000000000006,
+      "model" : "EV6 GT"
+    },
+    {
+      "fuelType" : "phev",
+      "kWh" : null,
+      "model" : "EV6 GT"
+    },
+    {
+      "fuelType" : "gas",
+      "kWh" : null,
+      "model" : "EV3"
+    },
+    {
+      "fuelType" : "electric",
+      "kWh" : 81.400000000000006,
+      "model" : "EV3"
+    },
+    {
+      "fuelType" : "phev",
+      "kWh" : null,
+      "model" : "EV3"
+    },
+    {
+      "fuelType" : "gas",
+      "kWh" : null,
+      "model" : "EV4"
+    },
+    {
+      "fuelType" : "electric",
+      "kWh" : 81.400000000000006,
+      "model" : "EV4"
+    },
+    {
+      "fuelType" : "phev",
+      "kWh" : null,
+      "model" : "EV4"
+    },
+    {
+      "fuelType" : "gas",
+      "kWh" : null,
+      "model" : "GV60"
+    },
+    {
+      "fuelType" : "electric",
+      "kWh" : 77.400000000000006,
+      "model" : "GV60"
+    },
+    {
+      "fuelType" : "phev",
+      "kWh" : null,
+      "model" : "GV60"
+    },
+    {
+      "fuelType" : "gas",
+      "kWh" : null,
+      "model" : "GV70 Electrified"
+    },
+    {
+      "fuelType" : "electric",
+      "kWh" : 77.400000000000006,
+      "model" : "GV70 Electrified"
+    },
+    {
+      "fuelType" : "phev",
+      "kWh" : null,
+      "model" : "GV70 Electrified"
+    },
+    {
+      "fuelType" : "gas",
+      "kWh" : null,
+      "model" : "G80 Electrified"
+    },
+    {
+      "fuelType" : "electric",
+      "kWh" : 87.200000000000003,
+      "model" : "G80 Electrified"
+    },
+    {
+      "fuelType" : "phev",
+      "kWh" : null,
+      "model" : "G80 Electrified"
+    },
+    {
+      "fuelType" : "gas",
+      "kWh" : null,
+      "model" : "Kona Electric"
+    },
+    {
+      "fuelType" : "electric",
+      "kWh" : 64.799999999999997,
+      "model" : "Kona Electric"
+    },
+    {
+      "fuelType" : "phev",
+      "kWh" : null,
+      "model" : "Kona Electric"
+    },
+    {
+      "fuelType" : "gas",
+      "kWh" : null,
+      "model" : "Niro EV"
+    },
+    {
+      "fuelType" : "electric",
+      "kWh" : 64.799999999999997,
+      "model" : "Niro EV"
+    },
+    {
+      "fuelType" : "phev",
+      "kWh" : 11.1,
+      "model" : "Niro EV"
+    },
+    {
+      "fuelType" : "gas",
+      "kWh" : null,
+      "model" : "Soul EV"
+    },
+    {
+      "fuelType" : "electric",
+      "kWh" : 64.799999999999997,
+      "model" : "Soul EV"
+    },
+    {
+      "fuelType" : "phev",
+      "kWh" : null,
+      "model" : "Soul EV"
+    },
+    {
+      "fuelType" : "gas",
+      "kWh" : null,
+      "model" : "Niro PHEV"
+    },
+    {
+      "fuelType" : "electric",
+      "kWh" : 64.799999999999997,
+      "model" : "Niro PHEV"
+    },
+    {
+      "fuelType" : "phev",
+      "kWh" : 11.1,
+      "model" : "Niro PHEV"
+    },
+    {
+      "fuelType" : "gas",
+      "kWh" : null,
+      "model" : "TUCSON"
+    },
+    {
+      "fuelType" : "electric",
+      "kWh" : null,
+      "model" : "TUCSON"
+    },
+    {
+      "fuelType" : "phev",
+      "kWh" : 13.800000000000001,
+      "model" : "TUCSON"
+    },
+    {
+      "fuelType" : "gas",
+      "kWh" : null,
+      "model" : "Santa Fe Plug-in Hybrid"
+    },
+    {
+      "fuelType" : "electric",
+      "kWh" : null,
+      "model" : "Santa Fe Plug-in Hybrid"
+    },
+    {
+      "fuelType" : "phev",
+      "kWh" : 13.800000000000001,
+      "model" : "Santa Fe Plug-in Hybrid"
+    },
+    {
+      "fuelType" : "gas",
+      "kWh" : null,
+      "model" : "santa_fe"
+    },
+    {
+      "fuelType" : "electric",
+      "kWh" : null,
+      "model" : "santa_fe"
+    },
+    {
+      "fuelType" : "phev",
+      "kWh" : 13.800000000000001,
+      "model" : "santa_fe"
+    },
+    {
+      "fuelType" : "gas",
+      "kWh" : null,
+      "model" : "Sorento PHEV"
+    },
+    {
+      "fuelType" : "electric",
+      "kWh" : null,
+      "model" : "Sorento PHEV"
+    },
+    {
+      "fuelType" : "phev",
+      "kWh" : 13.800000000000001,
+      "model" : "Sorento PHEV"
+    },
+    {
+      "fuelType" : "gas",
+      "kWh" : null,
+      "model" : "Sportage PHEV"
+    },
+    {
+      "fuelType" : "electric",
+      "kWh" : null,
+      "model" : "Sportage PHEV"
+    },
+    {
+      "fuelType" : "phev",
+      "kWh" : 13.800000000000001,
+      "model" : "Sportage PHEV"
+    },
+    {
+      "fuelType" : "gas",
+      "kWh" : null,
+      "model" : "Mystery EV"
+    },
+    {
+      "fuelType" : "electric",
+      "kWh" : null,
+      "model" : "Mystery EV"
+    },
+    {
+      "fuelType" : "phev",
+      "kWh" : null,
+      "model" : "Mystery EV"
+    },
+    {
+      "fuelType" : "gas",
+      "kWh" : null,
+      "model" : "Sonata"
+    },
+    {
+      "fuelType" : "electric",
+      "kWh" : null,
+      "model" : "Sonata"
+    },
+    {
+      "fuelType" : "phev",
+      "kWh" : null,
+      "model" : "Sonata"
+    },
+    {
+      "fuelType" : "gas",
+      "kWh" : null,
+      "model" : ""
+    },
+    {
+      "fuelType" : "electric",
+      "kWh" : null,
+      "model" : ""
+    },
+    {
+      "fuelType" : "phev",
+      "kWh" : null,
+      "model" : ""
+    }
+  ],
+  "energySources" : [
+    {
+      "added" : 0,
+      "capacity" : null,
+      "energy" : 1.2,
+      "manual" : null,
+      "modelDefault" : false,
+      "text" : "Estimated from charger samples"
+    },
+    {
+      "added" : 0,
+      "capacity" : null,
+      "energy" : 1.2,
+      "manual" : null,
+      "modelDefault" : true,
+      "text" : "Estimated from charger samples"
+    },
+    {
+      "added" : 30,
+      "capacity" : null,
+      "energy" : 31.699999999999999,
+      "manual" : null,
+      "modelDefault" : false,
+      "text" : "Estimated from charger samples"
+    },
+    {
+      "added" : 30,
+      "capacity" : null,
+      "energy" : 31.699999999999999,
+      "manual" : null,
+      "modelDefault" : true,
+      "text" : "Estimated from charger samples"
+    },
+    {
+      "added" : 0,
+      "capacity" : null,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : false,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 0,
+      "capacity" : null,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : true,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 30,
+      "capacity" : null,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : false,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 30,
+      "capacity" : null,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : true,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 0,
+      "capacity" : 0,
+      "energy" : 1.2,
+      "manual" : null,
+      "modelDefault" : false,
+      "text" : "Estimated from charger samples"
+    },
+    {
+      "added" : 0,
+      "capacity" : 0,
+      "energy" : 1.2,
+      "manual" : null,
+      "modelDefault" : true,
+      "text" : "Estimated from charger samples"
+    },
+    {
+      "added" : 30,
+      "capacity" : 0,
+      "energy" : 31.699999999999999,
+      "manual" : null,
+      "modelDefault" : false,
+      "text" : "Estimated from charger samples"
+    },
+    {
+      "added" : 30,
+      "capacity" : 0,
+      "energy" : 31.699999999999999,
+      "manual" : null,
+      "modelDefault" : true,
+      "text" : "Estimated from charger samples"
+    },
+    {
+      "added" : 0,
+      "capacity" : 0,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : false,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 0,
+      "capacity" : 0,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : true,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 30,
+      "capacity" : 0,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : false,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 30,
+      "capacity" : 0,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : true,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 0,
+      "capacity" : 77.400000000000006,
+      "energy" : 0.77400000000000002,
+      "manual" : null,
+      "modelDefault" : false,
+      "text" : "Estimated from charger samples"
+    },
+    {
+      "added" : 0,
+      "capacity" : 77.400000000000006,
+      "energy" : 0.77400000000000002,
+      "manual" : null,
+      "modelDefault" : true,
+      "text" : "Estimated from charger samples"
+    },
+    {
+      "added" : 30,
+      "capacity" : 77.400000000000006,
+      "energy" : 23.219999999999999,
+      "manual" : null,
+      "modelDefault" : false,
+      "text" : "Estimated from battery · 77.4 kWh"
+    },
+    {
+      "added" : 30,
+      "capacity" : 77.400000000000006,
+      "energy" : 23.219999999999999,
+      "manual" : null,
+      "modelDefault" : true,
+      "text" : "Estimated from battery · 77.4 kWh model default"
+    },
+    {
+      "added" : 0,
+      "capacity" : 77.400000000000006,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : false,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 0,
+      "capacity" : 77.400000000000006,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : true,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 30,
+      "capacity" : 77.400000000000006,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : false,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 30,
+      "capacity" : 77.400000000000006,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : true,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 0,
+      "capacity" : 84,
+      "energy" : 0.83999999999999997,
+      "manual" : null,
+      "modelDefault" : false,
+      "text" : "Estimated from charger samples"
+    },
+    {
+      "added" : 0,
+      "capacity" : 84,
+      "energy" : 0.83999999999999997,
+      "manual" : null,
+      "modelDefault" : true,
+      "text" : "Estimated from charger samples"
+    },
+    {
+      "added" : 30,
+      "capacity" : 84,
+      "energy" : 25.199999999999999,
+      "manual" : null,
+      "modelDefault" : false,
+      "text" : "Estimated from battery · 84 kWh"
+    },
+    {
+      "added" : 30,
+      "capacity" : 84,
+      "energy" : 25.199999999999999,
+      "manual" : null,
+      "modelDefault" : true,
+      "text" : "Estimated from battery · 84 kWh model default"
+    },
+    {
+      "added" : 0,
+      "capacity" : 84,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : false,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 0,
+      "capacity" : 84,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : true,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 30,
+      "capacity" : 84,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : false,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 30,
+      "capacity" : 84,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : true,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 0,
+      "capacity" : 64.799999999999997,
+      "energy" : 0.64800000000000002,
+      "manual" : null,
+      "modelDefault" : false,
+      "text" : "Estimated from charger samples"
+    },
+    {
+      "added" : 0,
+      "capacity" : 64.799999999999997,
+      "energy" : 0.64800000000000002,
+      "manual" : null,
+      "modelDefault" : true,
+      "text" : "Estimated from charger samples"
+    },
+    {
+      "added" : 30,
+      "capacity" : 64.799999999999997,
+      "energy" : 19.440000000000001,
+      "manual" : null,
+      "modelDefault" : false,
+      "text" : "Estimated from battery · 64.8 kWh"
+    },
+    {
+      "added" : 30,
+      "capacity" : 64.799999999999997,
+      "energy" : 19.440000000000001,
+      "manual" : null,
+      "modelDefault" : true,
+      "text" : "Estimated from battery · 64.8 kWh model default"
+    },
+    {
+      "added" : 0,
+      "capacity" : 64.799999999999997,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : false,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 0,
+      "capacity" : 64.799999999999997,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : true,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 30,
+      "capacity" : 64.799999999999997,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : false,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 30,
+      "capacity" : 64.799999999999997,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : true,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 0,
+      "capacity" : 110.3,
+      "energy" : 1.103,
+      "manual" : null,
+      "modelDefault" : false,
+      "text" : "Estimated from charger samples"
+    },
+    {
+      "added" : 0,
+      "capacity" : 110.3,
+      "energy" : 1.103,
+      "manual" : null,
+      "modelDefault" : true,
+      "text" : "Estimated from charger samples"
+    },
+    {
+      "added" : 30,
+      "capacity" : 110.3,
+      "energy" : 33.090000000000003,
+      "manual" : null,
+      "modelDefault" : false,
+      "text" : "Estimated from battery · 110.3 kWh"
+    },
+    {
+      "added" : 30,
+      "capacity" : 110.3,
+      "energy" : 33.090000000000003,
+      "manual" : null,
+      "modelDefault" : true,
+      "text" : "Estimated from battery · 110.3 kWh model default"
+    },
+    {
+      "added" : 0,
+      "capacity" : 110.3,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : false,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 0,
+      "capacity" : 110.3,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : true,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 30,
+      "capacity" : 110.3,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : false,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 30,
+      "capacity" : 110.3,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : true,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 0,
+      "capacity" : 99.75,
+      "energy" : 0.99750000000000005,
+      "manual" : null,
+      "modelDefault" : false,
+      "text" : "Estimated from charger samples"
+    },
+    {
+      "added" : 0,
+      "capacity" : 99.75,
+      "energy" : 0.99750000000000005,
+      "manual" : null,
+      "modelDefault" : true,
+      "text" : "Estimated from charger samples"
+    },
+    {
+      "added" : 30,
+      "capacity" : 99.75,
+      "energy" : 29.925000000000001,
+      "manual" : null,
+      "modelDefault" : false,
+      "text" : "Estimated from battery · 99.8 kWh"
+    },
+    {
+      "added" : 30,
+      "capacity" : 99.75,
+      "energy" : 29.925000000000001,
+      "manual" : null,
+      "modelDefault" : true,
+      "text" : "Estimated from battery · 99.8 kWh model default"
+    },
+    {
+      "added" : 0,
+      "capacity" : 99.75,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : false,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 0,
+      "capacity" : 99.75,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : true,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 30,
+      "capacity" : 99.75,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : false,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 30,
+      "capacity" : 99.75,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : true,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 0,
+      "capacity" : 38.25,
+      "energy" : 0.38250000000000001,
+      "manual" : null,
+      "modelDefault" : false,
+      "text" : "Estimated from charger samples"
+    },
+    {
+      "added" : 0,
+      "capacity" : 38.25,
+      "energy" : 0.38250000000000001,
+      "manual" : null,
+      "modelDefault" : true,
+      "text" : "Estimated from charger samples"
+    },
+    {
+      "added" : 30,
+      "capacity" : 38.25,
+      "energy" : 11.475,
+      "manual" : null,
+      "modelDefault" : false,
+      "text" : "Estimated from battery · 38.2 kWh"
+    },
+    {
+      "added" : 30,
+      "capacity" : 38.25,
+      "energy" : 11.475,
+      "manual" : null,
+      "modelDefault" : true,
+      "text" : "Estimated from battery · 38.2 kWh model default"
+    },
+    {
+      "added" : 0,
+      "capacity" : 38.25,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : false,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 0,
+      "capacity" : 38.25,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : true,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 30,
+      "capacity" : 38.25,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : false,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 30,
+      "capacity" : 38.25,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : true,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 0,
+      "capacity" : 0.050000000000000003,
+      "energy" : 0.00050000000000000001,
+      "manual" : null,
+      "modelDefault" : false,
+      "text" : "Estimated from charger samples"
+    },
+    {
+      "added" : 0,
+      "capacity" : 0.050000000000000003,
+      "energy" : 0.00050000000000000001,
+      "manual" : null,
+      "modelDefault" : true,
+      "text" : "Estimated from charger samples"
+    },
+    {
+      "added" : 30,
+      "capacity" : 0.050000000000000003,
+      "energy" : 0.014999999999999999,
+      "manual" : null,
+      "modelDefault" : false,
+      "text" : "Estimated from battery · 0 kWh"
+    },
+    {
+      "added" : 30,
+      "capacity" : 0.050000000000000003,
+      "energy" : 0.014999999999999999,
+      "manual" : null,
+      "modelDefault" : true,
+      "text" : "Estimated from battery · 0 kWh model default"
+    },
+    {
+      "added" : 0,
+      "capacity" : 0.050000000000000003,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : false,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 0,
+      "capacity" : 0.050000000000000003,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : true,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 30,
+      "capacity" : 0.050000000000000003,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : false,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 30,
+      "capacity" : 0.050000000000000003,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : true,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 0,
+      "capacity" : 0.25,
+      "energy" : 0.0025000000000000001,
+      "manual" : null,
+      "modelDefault" : false,
+      "text" : "Estimated from charger samples"
+    },
+    {
+      "added" : 0,
+      "capacity" : 0.25,
+      "energy" : 0.0025000000000000001,
+      "manual" : null,
+      "modelDefault" : true,
+      "text" : "Estimated from charger samples"
+    },
+    {
+      "added" : 30,
+      "capacity" : 0.25,
+      "energy" : 0.074999999999999997,
+      "manual" : null,
+      "modelDefault" : false,
+      "text" : "Estimated from battery · 0.2 kWh"
+    },
+    {
+      "added" : 30,
+      "capacity" : 0.25,
+      "energy" : 0.074999999999999997,
+      "manual" : null,
+      "modelDefault" : true,
+      "text" : "Estimated from battery · 0.2 kWh model default"
+    },
+    {
+      "added" : 0,
+      "capacity" : 0.25,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : false,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 0,
+      "capacity" : 0.25,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : true,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 30,
+      "capacity" : 0.25,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : false,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 30,
+      "capacity" : 0.25,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : true,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 0,
+      "capacity" : 12.349,
+      "energy" : 0.12349,
+      "manual" : null,
+      "modelDefault" : false,
+      "text" : "Estimated from charger samples"
+    },
+    {
+      "added" : 0,
+      "capacity" : 12.349,
+      "energy" : 0.12349,
+      "manual" : null,
+      "modelDefault" : true,
+      "text" : "Estimated from charger samples"
+    },
+    {
+      "added" : 30,
+      "capacity" : 12.349,
+      "energy" : 3.7047000000000003,
+      "manual" : null,
+      "modelDefault" : false,
+      "text" : "Estimated from battery · 12.3 kWh"
+    },
+    {
+      "added" : 30,
+      "capacity" : 12.349,
+      "energy" : 3.7047000000000003,
+      "manual" : null,
+      "modelDefault" : true,
+      "text" : "Estimated from battery · 12.3 kWh model default"
+    },
+    {
+      "added" : 0,
+      "capacity" : 12.349,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : false,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 0,
+      "capacity" : 12.349,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : true,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 30,
+      "capacity" : 12.349,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : false,
+      "text" : "Measured · manual"
+    },
+    {
+      "added" : 30,
+      "capacity" : 12.349,
+      "energy" : 12.5,
+      "manual" : 12.5,
+      "modelDefault" : true,
+      "text" : "Measured · manual"
+    }
+  ]
+}

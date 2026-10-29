@@ -1,0 +1,241 @@
+{
+  "accounts" : [
+    {
+      "brand" : "hyundai",
+      "dateCreated" : "2026-06-09T10:13:20Z",
+      "deviceId" : "ANDROID-DEVICE",
+      "id" : "0A87BEB7-B588-4F72-A674-C91D554AE27D",
+      "password" : "pässwörd",
+      "pin" : "4321",
+      "refreshToken" : "android-refresh",
+      "region" : "US",
+      "serializedAuthToken" : "{\"accessToken\":\"android-access\",\"refreshToken\":\"android-refresh\",\"expiresAt\":922692800.75}",
+      "username" : "pixel.owner@example.com"
+    }
+  ],
+  "automations" : [
+    {
+      "createdAt" : "2026-08-06T07:08:20Z",
+      "hour" : 7,
+      "id" : "ADD201D0-0000-4000-8000-000000000071",
+      "isEnabled" : true,
+      "kindRaw" : "unplugged",
+      "minute" : 30,
+      "threshold" : 20,
+      "title" : "Unplugged",
+      "vin" : "KMHAND00000000001"
+    }
+  ],
+  "chargeSessions" : [
+    {
+      "electricityRatePerKWh" : 0.1,
+      "endDate" : "2026-10-04T15:46:40Z",
+      "endPercentage" : 90,
+      "energyAddedKWh" : 52.25,
+      "id" : "ADD201D0-0000-4000-8000-000000000031",
+      "isDCFast" : false,
+      "lastSampleDate" : "2026-10-04T15:46:40Z",
+      "latitude" : 47.6,
+      "locationTypeRaw" : "home",
+      "longitude" : -122.33,
+      "maxChargeSpeedKW" : 11.5,
+      "rateWasLocationAware" : true,
+      "speedSamples" : [
+        {
+          "batteryPercentage" : 22.5,
+          "date" : "2026-10-04T07:46:40Z",
+          "speedKW" : 11.5
+        },
+        {
+          "batteryPercentage" : 50,
+          "date" : "2026-10-04T10:33:20Z",
+          "speedKW" : 11.25
+        }
+      ],
+      "startDate" : "2026-10-04T07:46:40Z",
+      "startPercentage" : 22.5,
+      "tariff" : {
+        "offPeakEndHour" : 5,
+        "offPeakStartHour" : 21,
+        "standardRate" : 0.1,
+        "timeZoneIdentifier" : "America\/Los_Angeles",
+        "usesSDGE" : false
+      },
+      "vin" : "KMHAND00000000001"
+    },
+    {
+      "electricityRatePerKWh" : 0.56,
+      "endDate" : "2026-10-06T16:00:00Z",
+      "endPercentage" : 81,
+      "energyAddedKWh" : 55.5,
+      "id" : "ADD201D0-0000-4000-8000-000000000032",
+      "isDCFast" : true,
+      "lastSampleDate" : "2026-10-06T16:00:00Z",
+      "locationName" : "Supercharger, \"Bay 4\"",
+      "locationTypeRaw" : "publicDC",
+      "manualEnergyKWh" : 0,
+      "maxChargeSpeedKW" : 233,
+      "rateWasLocationAware" : true,
+      "speedSamples" : [
+
+      ],
+      "startDate" : "2026-10-06T15:20:00Z",
+      "startPercentage" : 10,
+      "vin" : "KMHAND00000000001"
+    }
+  ],
+  "climatePresets" : [
+    {
+      "climateOptions" : {
+        "climate" : true,
+        "defrost" : true,
+        "duration" : 30,
+        "frontLeftSeat" : 0,
+        "frontLeftVentilation" : false,
+        "frontRightSeat" : 0,
+        "frontRightVentilation" : false,
+        "rearDefrost" : true,
+        "rearLeftSeat" : 2,
+        "rearLeftVentilation" : false,
+        "rearRightSeat" : 2,
+        "steeringWheel" : 0,
+        "temperature" : {
+          "units" : "fahrenheit",
+          "value" : 82
+        }
+      },
+      "iconName" : "wind",
+      "id" : "D4CF03E1-F9AC-4681-832B-20E87BC441E5",
+      "isSelected" : true,
+      "name" : "Defrost",
+      "sortOrder" : 2,
+      "vehicleVin" : "KMHAND00000000001"
+    }
+  ],
+  "createdAt" : "2026-10-29T00:54:25Z",
+  "maintenanceReminders" : [
+    {
+      "createdAt" : "2026-08-06T07:06:40Z",
+      "dueOdometer" : 12000,
+      "id" : "ADD201D0-0000-4000-8000-000000000061",
+      "notes" : "",
+      "title" : "Cabin filter",
+      "vin" : "KMHAND00000000001"
+    }
+  ],
+  "remoteCommands" : [
+    {
+      "commandName" : "Stop charging",
+      "completedAt" : "2026-10-05T11:33:29Z",
+      "id" : "ADD201D0-0000-4000-8000-000000000051",
+      "sourceName" : "Phone",
+      "startedAt" : "2026-10-05T11:33:20Z",
+      "stateRaw" : "succeeded",
+      "vehicleName" : "Ghost 👻 Ëv",
+      "vin" : "KMHAND00000000001"
+    }
+  ],
+  "sourceDevice" : "iPhone",
+  "trips" : [
+    {
+      "accessoriesEnergy" : 1359,
+      "avgSpeed" : 40.909,
+      "batteryCareEnergy" : 679,
+      "climateEnergy" : 2140,
+      "distance" : 112.5,
+      "drivetrainEnergy" : 26540,
+      "durationSeconds" : 9900,
+      "endLocationName" : "Mt. Rainier",
+      "id" : "ADD201D0-0000-4000-8000-000000000041",
+      "isFavorite" : false,
+      "maxSpeed" : 58.909,
+      "odometer" : 7990.25,
+      "regenEnergy" : 4120,
+      "savedDate" : "2026-10-02T03:00:00Z",
+      "startDate" : "2026-10-02T00:13:20Z",
+      "totalEnergyUsed" : 33980,
+      "tripKey" : "KMHAND00000000001-1790900000-7990.25",
+      "vin" : "KMHAND00000000001"
+    }
+  ],
+  "vehicles" : [
+    {
+      "accountBrand" : "hyundai",
+      "accountId" : "0A87BEB7-B588-4F72-A674-C91D554AE27D",
+      "accountUsername" : "pixel.owner@example.com",
+      "backgroundColorName" : "default",
+      "battery12V" : 77,
+      "chargePortTypeRaw" : "CCS2",
+      "climateStatus" : {
+        "airControlOn" : true,
+        "defrostOn" : false,
+        "steeringWheelHeatingOn" : true,
+        "temperature" : {
+          "units" : "celsius",
+          "value" : 21.5
+        }
+      },
+      "customName" : "Ghost 👻 Ëv",
+      "electricityRatePerKWh" : 0.1,
+      "enableSeatHeatControls" : false,
+      "evStatus" : {
+        "chargeSpeed" : 0,
+        "charging" : false,
+        "evRange" : {
+          "percentage" : 81,
+          "range" : {
+            "length" : 250.5,
+            "units" : "miles"
+          }
+        },
+        "maybeChargeTimeSeconds" : 0,
+        "maybePlugType" : 1,
+        "targetSocAC" : 90
+      },
+      "fuelTypeOverrideRaw" : "electric",
+      "fuelTypeRaw" : "electric",
+      "generation" : 3,
+      "homeLatitude" : 47.6,
+      "homeLongitude" : -122.33,
+      "homePrivacyRadiusMeters" : 1000,
+      "hoodOpen" : true,
+      "id" : "ADD201D0-0000-4000-8000-000000000011",
+      "isHidden" : true,
+      "lastUpdated" : "2026-10-03T04:01:40Z",
+      "location" : {
+        "latitude" : 47.6062,
+        "longitude" : -122.3321
+      },
+      "lockStatus" : "unknown",
+      "low12VBatteryThreshold" : 35,
+      "lowEVBatteryThreshold" : 10,
+      "model" : "IONIQ 6",
+      "notifyChargeComplete" : false,
+      "notifyChargeInterrupted" : true,
+      "notifyLow12VBattery" : true,
+      "notifyLowEVBattery" : true,
+      "notifyOpenPanels" : true,
+      "notifyTirePressure" : true,
+      "notifyUnlocked" : true,
+      "odometer" : {
+        "length" : 8001.5,
+        "units" : "kilometers"
+      },
+      "offPeakEndHour" : 5,
+      "offPeakStartHour" : 21,
+      "regId" : "reg-and",
+      "showClimateDurationOverride" : true,
+      "smartChargingEnabled" : false,
+      "smartChargingHomeOnly" : true,
+      "smartChargingTargetSOC" : 70,
+      "sortOrder" : 1,
+      "startClimateColorName" : "orange",
+      "syncDate" : "2026-10-03T04:00:50Z",
+      "unlockColorName" : "mint",
+      "vehicleImageColorRaw" : "gray",
+      "vin" : "KMHAND00000000001",
+      "watchBackgroundColorName" : "charcoal"
+    }
+  ],
+  "version" : 1
+}

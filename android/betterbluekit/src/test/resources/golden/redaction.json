@@ -1,0 +1,96 @@
+{
+  "headers" : {
+    "expected" : {
+      "accessToken" : "[REDACTED]",
+      "Authorization" : "Bearer [REDACTED]",
+      "blueLinkServicePin" : "[REDACTED]",
+      "client_id" : "id",
+      "clientSecret" : "[REDACTED]",
+      "Content-Type" : "application\/json",
+      "Set-Cookie" : "[REDACTED]",
+      "username" : "u@x.com",
+      "X-Auth-Thing" : "[REDACTED]"
+    },
+    "input" : {
+      "accessToken" : "a",
+      "Authorization" : "Bearer x",
+      "blueLinkServicePin" : "1234",
+      "client_id" : "id",
+      "clientSecret" : "s",
+      "Content-Type" : "application\/json",
+      "Set-Cookie" : "c",
+      "username" : "u@x.com",
+      "X-Auth-Thing" : "z"
+    }
+  },
+  "strings" : [
+    {
+      "expected" : "{\"username\":\".com***@***\", \"password\":\"[REDACTED]\", \"pin\":\"[REDACTED]\"}",
+      "input" : "{\"username\": \"john.doe@example.com\", \"password\": \"hunter2\", \"pin\": \"1234\"}"
+    },
+    {
+      "expected" : "{\"email\":\".co***@***\",\"loginId\":\".example.org***@***\",\"notificationEmail\":\".io***@***\"}",
+      "input" : "{\"email\":\"a@b.co\",\"loginId\":\"x.y@mail.example.org\",\"notificationEmail\":\"n@n.io\"}"
+    },
+    {
+      "expected" : "{\"access_token\":\"[REDACTED]\", \"refresh_token\":\"[REDACTED]\", \"otpKey\":\"[REDACTED]\"}",
+      "input" : "{\"access_token\": \"eyJhbGciOi.abc-def_123\", \"refresh_token\":\"r\\\"t\\\\ok\", \"otpKey\": \"k\"}"
+    },
+    {
+      "expected" : "Authorization: Bearer [REDACTED] and more",
+      "input" : "Authorization: Bearer abc.DEF-123_xyz and more"
+    },
+    {
+      "expected" : "{\"vehicleLocation\":{\"coord\":{\"lat\":\"[REDACTED]\",\"lon\":\"[REDACTED]\",\"alt\":20}},\"latitude\":\"[REDACTED]\",\"lng\":\"[REDACTED]\"}",
+      "input" : "{\"vehicleLocation\":{\"coord\":{\"lat\":32.7157,\"lon\":-117.1611,\"alt\":20}},\"latitude\": -33.8688,\"lng\":151.2093}"
+    },
+    {
+      "expected" : "coords [[LOCATION_REDACTED]] and 1.5, 2.5",
+      "input" : "coords [32.715736, -117.161087] and 1.5, 2.5"
+    },
+    {
+      "expected" : "{\"firstName\":\"[REDACTED]\",\"lastName\":\"[REDACTED]\",\"phone\":\"[REDACTED]\",\"phoneNumber\":\"[REDACTED]\",\"number\":\"[REDACTED]\"}",
+      "input" : "{\"firstName\":\"Sai\",\"lastName\":\"K\",\"phone\":\"555-0100\",\"phoneNumber\":\"+1 555\",\"number\":\"42\"}"
+    },
+    {
+      "expected" : "{\"accountId\":\"[REDACTED]\",\"user_id\":\"[REDACTED]\",\"deviceid\":\"[REDACTED]\",\"enrollmentCode\":\"[REDACTED]\",\"clientuuid\":\"[REDACTED]\"}",
+      "input" : "{\"accountId\":\"A1\",\"user_id\":\"u\",\"deviceid\":\"d\",\"enrollmentCode\":\"E\",\"clientuuid\":\"c\"}"
+    },
+    {
+      "expected" : "{\"street\":\"[REDACTED]\",\"postalCode\":\"[REDACTED]\",\"city\":\"Springfield\"}",
+      "input" : "{\"street\":\"915 Long Drive\",\"postalCode\":\"62305\",\"city\":\"Springfield\"}"
+    },
+    {
+      "expected" : "{\"vin\":\"KM8**********0001\",\"VIN\":\"5NP**********0003\",\"vin2\":\"KM8KRDAF5PU000001\"}",
+      "input" : "{\"vin\":\"KM8KRDAF5PU000001\",\"VIN\":\"5NPEG4JA0MH000003\",\"vin2\":\"KM8KRDAF5PU000001\"}"
+    },
+    {
+      "expected" : "{\"regid\":\"[REDACTED]\",\"regId\":\"[REDACTED]\",\"regID\":\"[REDACTED]\"}",
+      "input" : "{\"regid\":\"H00000000000000001\",\"regId\":\"R\",\"regID\":\"Q\"}"
+    },
+    {
+      "expected" : "GET https:\/\/api.telematics.hyundaiusa.com\/ac\/v2\/enrollment\/details\/[EMAIL_REDACTED]",
+      "input" : "GET https:\/\/api.telematics.hyundaiusa.com\/ac\/v2\/enrollment\/details\/someone@example.com"
+    },
+    {
+      "expected" : "{\"userId\":\"[REDACTED]\"}",
+      "input" : "{\"userId\":\"someone@example.com\"}"
+    },
+    {
+      "expected" : "{\"Cookie\":\"[REDACTED]\",\"TransactionId\":\"[REDACTED]\",\"Pauth\":\"[REDACTED]\"}",
+      "input" : "{\"Cookie\":\"__cf_bm=abc\",\"TransactionId\":\"t-1\",\"Pauth\":\"p\"}"
+    },
+    {
+      "expected" : "plain text with nothing sensitive",
+      "input" : "plain text with nothing sensitive"
+    },
+    {
+      "expected" : "{\"vin\":\"short\"}",
+      "input" : "{\"vin\":\"short\"}"
+    },
+    {
+      "expected" : "",
+      "input" : ""
+    }
+  ]
+}

@@ -17,6 +17,10 @@ git submodule update --init --recursive
 
 **Important**: The local submodule has the SwiftLint plugin commented out in `Package.swift` to avoid build conflicts with the main project. When pushing BetterBlueKit changes upstream, you may need to uncomment the plugin configuration in the standalone repository.
 
+### Android port
+
+`android/` is the Android version (Kotlin, Jetpack Compose, Material 3 Expressive), being ported in phases; see `android/README.md`. `android/betterbluekit` is a Kotlin port of BetterBlueKit, so a change to BetterBlueKit's Hyundai USA client, models or redaction needs the same change there. `android/tools/parity/run.sh` checks the two stay identical. Likewise `android/data` ports the app's models and their logic (`GhostBlue/Models`, charge sessions, smart charging, `CachedAPIClient`, `BackupArchive`), so a change to those, and above all to the backup format, needs the same change there; `android/tools/parity/app-parity.sh` regenerates its golden files from the iOS code on a simulator. Build with Android Studio's JDK: `JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :betterbluekit:test :data:testDebugUnitTest :app:assembleDebug` from `android/`.
+
 ## Build Commands
 
 ### Building the Project

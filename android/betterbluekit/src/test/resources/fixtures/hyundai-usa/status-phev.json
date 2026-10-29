@@ -1,0 +1,13 @@
+{
+  "vehicleStatus": {
+    "doorLock": true,
+    "fuelLevel": 55,
+    "dte": {"value": 999, "unit": 3},
+    "evStatus": {
+      "batteryCharge": false,
+      "batteryStatus": 80,
+      "batteryPlugin": 0,
+      "drvDistance": [{"type": 1, "rangeByFuel": {"evModeRange": {"value": 31, "unit": 3}, "gasModeRange": {"value": 380, "unit": 3}, "totalAvailableRange": {"value": 411, "unit": 3}}}]
+    }
+  }
+}

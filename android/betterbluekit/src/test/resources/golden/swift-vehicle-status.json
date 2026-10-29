@@ -1,0 +1,54 @@
+{
+  "battery12V" : 87,
+  "climateStatus" : {
+    "airControlOn" : false,
+    "defrostOn" : false,
+    "steeringWheelHeatingOn" : false,
+    "temperature" : {
+      "units" : "fahrenheit",
+      "value" : 72
+    }
+  },
+  "doorOpen" : {
+    "backLeft" : false,
+    "backRight" : false,
+    "frontLeft" : false,
+    "frontRight" : true
+  },
+  "evStatus" : {
+    "chargeSpeed" : 10.9,
+    "charging" : true,
+    "evRange" : {
+      "percentage" : 63,
+      "range" : {
+        "length" : 182,
+        "units" : "miles"
+      }
+    },
+    "maybeChargeTimeSeconds" : 5700,
+    "maybePlugType" : 2,
+    "targetSocAC" : 90,
+    "targetSocDC" : 80
+  },
+  "hoodOpen" : false,
+  "lastUpdated" : "2026-10-28T23:43:19Z",
+  "location" : {
+    "latitude" : 32.7157,
+    "longitude" : -117.1611
+  },
+  "lockStatus" : "locked",
+  "odometer" : {
+    "length" : 0,
+    "units" : "miles"
+  },
+  "syncDate" : "2025-07-06T14:22:10Z",
+  "tirePressureWarning" : {
+    "all" : false,
+    "frontLeft" : false,
+    "frontRight" : true,
+    "rearLeft" : false,
+    "rearRight" : false
+  },
+  "trunkOpen" : false,
+  "vin" : "TESTVIN0000000000"
+}

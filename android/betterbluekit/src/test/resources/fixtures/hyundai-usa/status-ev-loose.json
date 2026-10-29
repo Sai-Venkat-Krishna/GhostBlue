@@ -1,0 +1,22 @@
+{
+  "vehicleStatus": {
+    "dateTime": "2025-07-06T14:22:10.123Z",
+    "doorLock": 0,
+    "airCtrlOn": 1,
+    "defrost": true,
+    "steerWheelHeat": "2",
+    "airTemp": {"value": "HI", "unit": "1"},
+    "battery": {"batSoc": "79"},
+    "vehicleLocation": {"coord": {"lat": "32.7157", "lon": "-117.1611"}},
+    "evStatus": {
+      "batteryCharge": false,
+      "batteryStatus": "54.5",
+      "batteryPlugin": "1",
+      "batteryStndChrgPower": "0",
+      "batteryFstChrgPower": "148.2",
+      "remainTime2": {"atc": {"value": "35"}},
+      "drvDistance": [{"type": 2, "rangeByFuel": {"evModeRange": {"value": "301.5", "unit": "1"}}}],
+      "reservChargeInfos": {"targetSOClist": [{"plugType": "1", "targetSOClevel": 90}, {"plugType": 0, "targetSOClevel": "80"}, {"plugType": 0, "targetSOClevel": 70.0}]}
+    }
+  }
+}

@@ -1,0 +1,472 @@
+{
+  "accounts" : [
+    {
+      "brand" : "hyundai",
+      "dateCreated" : "2026-05-28T20:26:40Z",
+      "deviceId" : "DEVICE-1",
+      "id" : "0A1B2C3D-0000-4000-8000-000000000001",
+      "lastVehiclesFetch" : "2026-09-21T14:15:00Z",
+      "password" : "s3cret \"quoted\"",
+      "pin" : "1234",
+      "refreshToken" : "refresh-token",
+      "region" : "US",
+      "rememberMeToken" : "rm-token",
+      "serializedAuthToken" : "{\"accessToken\":\"access\",\"refreshToken\":\"refresh\",\"expiresAt\":921692800.5}",
+      "username" : "Driver@Example.com"
+    },
+    {
+      "brand" : "fake",
+      "dateCreated" : "2026-05-28T20:35:00Z",
+      "id" : "0A1B2C3D-0000-4000-8000-000000000002",
+      "password" : "betterblue",
+      "pin" : "",
+      "refreshToken" : "",
+      "region" : "CA",
+      "username" : "testaccount@betterblue.com"
+    }
+  ],
+  "automations" : [
+    {
+      "createdAt" : "2026-07-25T17:23:20Z",
+      "hour" : 7,
+      "id" : "0A1B2C3D-0000-4000-8000-000000000071",
+      "isEnabled" : true,
+      "kindRaw" : "lowBattery",
+      "lastTriggeredAt" : "2026-09-10T00:26:40Z",
+      "minute" : 30,
+      "threshold" : 25,
+      "title" : "Charge soon",
+      "vin" : "KMHIOS00000000001"
+    },
+    {
+      "createdAt" : "2026-07-25T17:25:00Z",
+      "hour" : 6,
+      "id" : "0A1B2C3D-0000-4000-8000-000000000072",
+      "isEnabled" : false,
+      "kindRaw" : "preconditionReminder",
+      "minute" : 45,
+      "threshold" : 20,
+      "title" : "Warm up",
+      "vin" : "KMHIOS00000000001"
+    }
+  ],
+  "chargeSessions" : [
+    {
+      "electricityRatePerKWh" : 0.12,
+      "endDate" : "2026-09-21T20:13:20Z",
+      "endPercentage" : 80,
+      "energyAddedKWh" : 41.2,
+      "id" : "0A1B2C3D-0000-4000-8000-000000000031",
+      "isDCFast" : false,
+      "lastSampleDate" : "2026-09-21T20:13:20Z",
+      "latitude" : 32.7158,
+      "locationName" : "Home",
+      "locationTypeRaw" : "home",
+      "longitude" : -117.1612,
+      "maxChargeSpeedKW" : 10.9,
+      "rateWasLocationAware" : true,
+      "speedSamples" : [
+        {
+          "batteryPercentage" : 40,
+          "date" : "2026-09-21T15:13:20Z",
+          "speedKW" : 10.9
+        },
+        {
+          "batteryPercentage" : 58.5,
+          "date" : "2026-09-21T17:13:20Z",
+          "speedKW" : 10.8
+        }
+      ],
+      "startDate" : "2026-09-21T14:13:20Z",
+      "startPercentage" : 31,
+      "tariff" : {
+        "offPeakEndHour" : 6,
+        "offPeakRate" : 0.12,
+        "offPeakStartHour" : 0,
+        "peakRate" : 0.62,
+        "standardRate" : 0.31,
+        "timeZoneIdentifier" : "America\/Los_Angeles",
+        "usesSDGE" : true
+      },
+      "vin" : "KMHIOS00000000001"
+    },
+    {
+      "actualCost" : 21.37,
+      "electricityRatePerKWh" : 0.48,
+      "endDate" : "2026-09-24T04:03:20Z",
+      "endPercentage" : 72,
+      "energyAddedKWh" : 0,
+      "id" : "0A1B2C3D-0000-4000-8000-000000000032",
+      "isDCFast" : true,
+      "lastSampleDate" : "2026-09-24T04:03:20Z",
+      "locationName" : "Electrify America",
+      "locationTypeRaw" : "publicDC",
+      "manualEnergyKWh" : 46.1,
+      "maxChargeSpeedKW" : 178,
+      "rateWasLocationAware" : true,
+      "speedSamples" : [
+
+      ],
+      "startDate" : "2026-09-24T03:03:20Z",
+      "startPercentage" : 18,
+      "vin" : "KMHIOS00000000001"
+    },
+    {
+      "endPercentage" : 62.5,
+      "energyAddedKWh" : 5.45,
+      "id" : "0A1B2C3D-0000-4000-8000-000000000034",
+      "isDCFast" : false,
+      "lastSampleDate" : "2026-09-27T09:36:40Z",
+      "locationTypeRaw" : "automatic",
+      "maxChargeSpeedKW" : 10.9,
+      "rateWasLocationAware" : true,
+      "speedSamples" : [
+
+      ],
+      "startDate" : "2026-09-27T09:06:40Z",
+      "startPercentage" : 55,
+      "vin" : "KMHIOS00000000001"
+    },
+    {
+      "electricityRatePerKWh" : 0.2,
+      "endDate" : "2026-09-26T07:20:00Z",
+      "endPercentage" : 52,
+      "energyAddedKWh" : 9.75,
+      "id" : "0A1B2C3D-0000-4000-8000-000000000033",
+      "isDCFast" : false,
+      "lastSampleDate" : "2026-09-26T07:20:00Z",
+      "locationTypeRaw" : "automatic",
+      "maxChargeSpeedKW" : 0,
+      "rateWasLocationAware" : false,
+      "speedSamples" : [
+
+      ],
+      "startDate" : "2026-09-26T05:20:00Z",
+      "startPercentage" : 40,
+      "vin" : "KMHIOS00000000001"
+    }
+  ],
+  "climatePresets" : [
+    {
+      "climateOptions" : {
+        "climate" : true,
+        "defrost" : false,
+        "duration" : 10,
+        "frontLeftSeat" : 0,
+        "frontLeftVentilation" : false,
+        "frontRightSeat" : 0,
+        "frontRightVentilation" : false,
+        "rearDefrost" : false,
+        "rearLeftSeat" : 0,
+        "rearLeftVentilation" : false,
+        "rearRightSeat" : 0,
+        "rearRightVentilation" : false,
+        "steeringWheel" : 0,
+        "temperature" : {
+          "units" : "fahrenheit",
+          "value" : 72
+        }
+      },
+      "iconName" : "fan",
+      "id" : "0A1B2C3D-0000-4000-8000-000000000023",
+      "isSelected" : false,
+      "name" : "Morning",
+      "sortOrder" : 0,
+      "vehicleVin" : "KMHIOS00000000002"
+    },
+    {
+      "climateOptions" : {
+        "climate" : true,
+        "defrost" : false,
+        "duration" : 10,
+        "frontLeftSeat" : 0,
+        "frontLeftVentilation" : false,
+        "frontRightSeat" : 0,
+        "frontRightVentilation" : false,
+        "rearDefrost" : false,
+        "rearLeftSeat" : 0,
+        "rearLeftVentilation" : false,
+        "rearRightSeat" : 0,
+        "rearRightVentilation" : false,
+        "steeringWheel" : 0,
+        "temperature" : {
+          "units" : "fahrenheit",
+          "value" : 72
+        }
+      },
+      "iconName" : "snowflake",
+      "id" : "0A1B2C3D-0000-4000-8000-000000000022",
+      "isSelected" : false,
+      "name" : "Cool",
+      "sortOrder" : 0,
+      "vehicleVin" : "KMHIOS00000000001"
+    },
+    {
+      "climateOptions" : {
+        "climate" : true,
+        "defrost" : true,
+        "duration" : 15,
+        "frontLeftSeat" : 3,
+        "frontLeftVentilation" : true,
+        "frontRightSeat" : 1,
+        "frontRightVentilation" : false,
+        "rearLeftSeat" : 0,
+        "rearLeftVentilation" : false,
+        "rearRightSeat" : 0,
+        "rearRightVentilation" : false,
+        "steeringWheel" : 1,
+        "temperature" : {
+          "units" : "celsius",
+          "value" : 24
+        }
+      },
+      "iconName" : "sun.max",
+      "id" : "0A1B2C3D-0000-4000-8000-000000000021",
+      "isSelected" : true,
+      "name" : "Morning",
+      "sortOrder" : 1,
+      "vehicleVin" : "KMHIOS00000000001"
+    }
+  ],
+  "createdAt" : "2026-10-29T00:54:20Z",
+  "maintenanceReminders" : [
+    {
+      "completedAt" : "2026-08-06T07:06:40Z",
+      "createdAt" : "2026-07-25T17:21:40Z",
+      "id" : "0A1B2C3D-0000-4000-8000-000000000062",
+      "lastNotifiedAt" : "2026-07-31T12:13:20Z",
+      "notes" : "",
+      "title" : "Wipers",
+      "vin" : "KMHIOS00000000002"
+    },
+    {
+      "cost" : 49.99,
+      "createdAt" : "2026-07-25T17:20:00Z",
+      "dueDate" : "2026-11-18T11:06:40Z",
+      "dueOdometer" : 15000,
+      "id" : "0A1B2C3D-0000-4000-8000-000000000061",
+      "notes" : "Front to back",
+      "title" : "Tire rotation",
+      "vin" : "KMHIOS00000000001"
+    }
+  ],
+  "remoteCommands" : [
+    {
+      "commandName" : "Start climate",
+      "completedAt" : "2026-09-22T18:02:10Z",
+      "errorMessage" : "Vehicle did not respond",
+      "id" : "0A1B2C3D-0000-4000-8000-000000000052",
+      "sourceName" : "Apple Watch",
+      "startedAt" : "2026-09-22T18:01:40Z",
+      "stateRaw" : "failed",
+      "vehicleName" : "Blue Ghost",
+      "vin" : "KMHIOS00000000001"
+    },
+    {
+      "commandName" : "Lock",
+      "completedAt" : "2026-09-22T18:00:12Z",
+      "id" : "0A1B2C3D-0000-4000-8000-000000000051",
+      "sourceName" : "iPhone",
+      "startedAt" : "2026-09-22T18:00:00Z",
+      "stateRaw" : "succeeded",
+      "vehicleName" : "Blue Ghost",
+      "vin" : "KMHIOS00000000001"
+    }
+  ],
+  "sourceDevice" : "iPhone",
+  "trips" : [
+    {
+      "accessoriesEnergy" : 108,
+      "avgSpeed" : 27.666,
+      "batteryCareEnergy" : 54,
+      "climateEnergy" : 410,
+      "distance" : 8.3,
+      "drivetrainEnergy" : 1950,
+      "durationSeconds" : 1080,
+      "id" : "0A1B2C3D-0000-4000-8000-000000000042",
+      "isFavorite" : false,
+      "maxSpeed" : 45.666,
+      "odometer" : 12308.5,
+      "regenEnergy" : 220,
+      "savedDate" : "2026-09-21T03:06:40Z",
+      "startDate" : "2026-09-21T00:20:00Z",
+      "totalEnergyUsed" : 2710,
+      "tripKey" : "KMHIOS00000000001-1789950000-12308.5",
+      "vin" : "KMHIOS00000000001"
+    },
+    {
+      "accessoriesEnergy" : 358,
+      "avgSpeed" : 37.866,
+      "batteryCareEnergy" : 179,
+      "climateEnergy" : 720,
+      "customName" : "Commute",
+      "distance" : 28.4,
+      "drivetrainEnergy" : 6950,
+      "durationSeconds" : 2700,
+      "endLatitude" : 32.8801,
+      "endLocationName" : "Office",
+      "endLongitude" : -117.234,
+      "id" : "0A1B2C3D-0000-4000-8000-000000000041",
+      "isFavorite" : true,
+      "maxSpeed" : 55.866,
+      "odometer" : 12300.2,
+      "regenEnergy" : 1140,
+      "savedDate" : "2026-09-20T13:13:20Z",
+      "startDate" : "2026-09-20T10:26:40Z",
+      "startLatitude" : 32.7157,
+      "startLocationName" : "Home",
+      "startLongitude" : -117.1611,
+      "totalEnergyUsed" : 8950,
+      "tripKey" : "KMHIOS00000000001-1789900000-12300.2",
+      "vin" : "KMHIOS00000000001"
+    }
+  ],
+  "vehicles" : [
+    {
+      "abrpCarModel" : "hyundai:ioniq5:22:77wr",
+      "abrpUserToken" : "abrp-token",
+      "accountBrand" : "hyundai",
+      "accountId" : "0A1B2C3D-0000-4000-8000-000000000001",
+      "accountUsername" : "Driver@Example.com",
+      "backgroundColorName" : "ocean",
+      "battery12V" : 81,
+      "batteryCapacityKWh" : 84,
+      "chargePortTypeRaw" : "NACS",
+      "climateStatus" : {
+        "airControlOn" : true,
+        "defrostOn" : true,
+        "steeringWheelHeatingOn" : false,
+        "temperature" : {
+          "units" : "fahrenheit",
+          "value" : 72
+        }
+      },
+      "customName" : "Blue Ghost",
+      "dcFastChargingRatePerKWh" : 0.48,
+      "doorOpen" : {
+        "backLeft" : false,
+        "backRight" : false,
+        "frontLeft" : true,
+        "frontRight" : false
+      },
+      "electricityRatePerKWh" : 0.31,
+      "enableSeatHeatControls" : true,
+      "evStatus" : {
+        "chargeSpeed" : 10.9,
+        "charging" : true,
+        "evRange" : {
+          "percentage" : 62.5,
+          "range" : {
+            "length" : 184,
+            "units" : "miles"
+          }
+        },
+        "maybeChargeTimeSeconds" : 3600,
+        "maybePlugType" : 2,
+        "targetSocAC" : 80,
+        "targetSocDC" : 90
+      },
+      "fuelTypeRaw" : "electric",
+      "generation" : 3,
+      "homeLatitude" : 32.7157,
+      "homeLongitude" : -117.1611,
+      "homePrivacyRadiusMeters" : 250,
+      "hoodOpen" : false,
+      "id" : "0A1B2C3D-0000-4000-8000-000000000011",
+      "isHidden" : false,
+      "lastUpdated" : "2026-09-21T14:16:40Z",
+      "location" : {
+        "latitude" : 32.7158,
+        "longitude" : -117.1612
+      },
+      "lockColorName" : "indigo",
+      "lockStatus" : "locked",
+      "low12VBatteryThreshold" : 40,
+      "lowEVBatteryThreshold" : 15,
+      "model" : "IONIQ 5",
+      "monthlyChargingBudget" : 75,
+      "notifyChargeComplete" : true,
+      "notifyChargeInterrupted" : true,
+      "notifyLow12VBattery" : true,
+      "notifyLowEVBattery" : true,
+      "notifyOpenPanels" : true,
+      "notifyTirePressure" : false,
+      "notifyUnlocked" : true,
+      "odometer" : {
+        "length" : 12345.6,
+        "units" : "miles"
+      },
+      "offPeakElectricityRatePerKWh" : 0.12,
+      "offPeakEndHour" : 7,
+      "offPeakStartHour" : 23,
+      "peakElectricityRatePerKWh" : 0.62,
+      "primaryColorName" : "teal",
+      "regId" : "reg-ios",
+      "showClimateDurationOverride" : false,
+      "smartChargingEnabled" : true,
+      "smartChargingHomeOnly" : false,
+      "smartChargingTargetSOC" : 85,
+      "sortOrder" : 3,
+      "stopColorName" : "pink",
+      "syncDate" : "2026-09-21T14:15:50Z",
+      "tirePressureWarning" : {
+        "all" : false,
+        "frontLeft" : true,
+        "frontRight" : false,
+        "rearLeft" : false,
+        "rearRight" : false
+      },
+      "trunkOpen" : false,
+      "vehicleImageColorRaw" : "matte-grey",
+      "vin" : "KMHIOS00000000001",
+      "watchBackgroundColorName" : "midnight"
+    },
+    {
+      "accountBrand" : "hyundai",
+      "accountId" : "0A1B2C3D-0000-4000-8000-000000000001",
+      "accountUsername" : "Driver@Example.com",
+      "backgroundColorName" : "default",
+      "chargePortTypeRaw" : "CCS1",
+      "enableSeatHeatControls" : false,
+      "fuelTypeOverrideRaw" : "phev",
+      "fuelTypeRaw" : "gas",
+      "gasRange" : {
+        "percentage" : 55,
+        "range" : {
+          "length" : 410,
+          "units" : "kilometers"
+        }
+      },
+      "generation" : 2,
+      "homePrivacyRadiusMeters" : 300,
+      "id" : "0A1B2C3D-0000-4000-8000-000000000012",
+      "isHidden" : false,
+      "lockStatus" : "unlocked",
+      "low12VBatteryThreshold" : 35,
+      "lowEVBatteryThreshold" : 20,
+      "model" : "TUCSON",
+      "notifyChargeComplete" : true,
+      "notifyChargeInterrupted" : true,
+      "notifyLow12VBattery" : true,
+      "notifyLowEVBattery" : true,
+      "notifyOpenPanels" : true,
+      "notifyTirePressure" : true,
+      "notifyUnlocked" : false,
+      "odometer" : {
+        "length" : 40210,
+        "units" : "kilometers"
+      },
+      "offPeakEndHour" : 6,
+      "offPeakStartHour" : 0,
+      "regId" : "reg-phev",
+      "smartChargingEnabled" : false,
+      "smartChargingHomeOnly" : true,
+      "smartChargingTargetSOC" : 80,
+      "sortOrder" : 4,
+      "vehicleImageColorRaw" : "white",
+      "vin" : "KMHIOS00000000002",
+      "watchBackgroundColorName" : "charcoal"
+    }
+  ],
+  "version" : 1
+}

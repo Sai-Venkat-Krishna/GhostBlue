@@ -1,0 +1,55 @@
+{
+  "addedOnSecondImport" : 0,
+  "orphanedVehicles" : [
+    "KMHAND0RPHAN00002"
+  ],
+  "sessions" : [
+    {
+      "chargingCost" : 5.2244999999999999,
+      "energyDelivered" : 52.244999999999997,
+      "id" : "ADD201D0-0000-4000-8000-000000000031"
+    },
+    {
+      "chargingCost" : 0,
+      "energyDelivered" : 0,
+      "id" : "ADD201D0-0000-4000-8000-000000000032"
+    }
+  ],
+  "summary" : [
+    [
+      "Accounts",
+      "1 added, 0 already here"
+    ],
+    [
+      "Vehicles",
+      "1 added, 0 filled in, 0 unchanged"
+    ],
+    [
+      "Climate Presets",
+      "1 added, 0 already here"
+    ],
+    [
+      "Charge Sessions",
+      "2 added, 0 already here"
+    ],
+    [
+      "Trips",
+      "1 added, 0 already here"
+    ],
+    [
+      "Remote Commands",
+      "1 added, 0 already here"
+    ],
+    [
+      "Maintenance",
+      "1 added, 0 already here"
+    ],
+    [
+      "Automations",
+      "1 added, 0 already here"
+    ]
+  ],
+  "tokensDecoded" : [
+    1901000000.75
+  ]
+}

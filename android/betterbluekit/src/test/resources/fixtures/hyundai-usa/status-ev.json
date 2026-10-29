@@ -1,0 +1,26 @@
+{
+  "vehicleStatus": {
+    "dateTime": "2025-07-06T14:22:10Z",
+    "doorLock": true,
+    "airCtrlOn": false,
+    "defrost": false,
+    "steerWheelHeat": 0,
+    "airTemp": {"value": "72", "unit": 1, "hvacTempType": 1},
+    "battery": {"batSoc": 87, "batState": 0},
+    "trunkOpen": false,
+    "hoodOpen": false,
+    "doorOpen": {"frontLeft": 0, "frontRight": 1, "backLeft": 0, "backRight": 0},
+    "tirePressureLamp": {"tirePressureWarningLampAll": 0, "tirePressureWarningLampFrontLeft": 0, "tirePressureWarningLampFrontRight": 1, "tirePressureWarningLampRearLeft": 0, "tirePressureWarningLampRearRight": 0},
+    "vehicleLocation": {"coord": {"lat": 32.7157, "lon": -117.1611, "alt": 20, "type": 0}, "head": 90, "speed": {"value": 0, "unit": 1}},
+    "evStatus": {
+      "batteryCharge": true,
+      "batteryStatus": 63,
+      "batteryPlugin": 2,
+      "batteryStndChrgPower": 10.9,
+      "batteryFstChrgPower": 0,
+      "remainTime2": {"etc1": {"value": 600, "unit": 1}, "atc": {"value": 95, "unit": 1}},
+      "drvDistance": [{"type": 2, "rangeByFuel": {"evModeRange": {"value": 182, "unit": 3}, "totalAvailableRange": {"value": 182, "unit": 3}}}],
+      "reservChargeInfos": {"targetSOClist": [{"plugType": 0, "targetSOClevel": 80, "dte": {"rangeByFuel": {}}}, {"plugType": 1, "targetSOClevel": 90}]}
+    }
+  }
+}

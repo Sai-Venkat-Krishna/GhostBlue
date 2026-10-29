@@ -1,0 +1,10 @@
+{
+  "enrolledVehicleDetails": [
+    {"vehicleDetails": {"vin": "KM8KRDAF5PU000001", "regid": "H00000000000000001", "nickName": "IONIQ 5", "evStatus": "E", "vehicleGeneration": "3", "odometer": "8500.5", "modelCode": "IONIQ 5"}},
+    {"vehicleDetails": {"vin": "KM8JCCD15RU000002", "regid": "H00000000000000002", "nickName": "Tucson PHEV", "evStatus": "P", "vehicleGeneration": "2", "odometer": 12000}},
+    {"vehicleDetails": {"vin": "5NPEG4JA0MH000003", "regid": "H00000000000000003", "nickName": "Sonata", "evStatus": "N", "vehicleGeneration": "x"}},
+    {"vehicleDetails": {"vin": "5NPEG4JA0MH000004", "regid": "H00000000000000004", "evStatus": "E", "vehicleGeneration": "3"}},
+    {"vehicleDetails": {"vin": "5NPEG4JA0MH000005", "regid": 12345, "nickName": "Numeric regid", "evStatus": "E", "vehicleGeneration": "3"}},
+    {"notVehicleDetails": {}}
+  ]
+}
