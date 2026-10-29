@@ -162,6 +162,9 @@ interface MaintenanceReminderDao {
     @Query("SELECT * FROM maintenance_reminders ORDER BY createdAt")
     suspend fun all(): List<MaintenanceReminder>
 
+    @Query("SELECT * FROM maintenance_reminders ORDER BY createdAt")
+    fun observeAll(): Flow<List<MaintenanceReminder>>
+
     @Query("SELECT * FROM maintenance_reminders WHERE vin = :vin ORDER BY createdAt")
     suspend fun forVin(vin: String): List<MaintenanceReminder>
 
@@ -180,6 +183,9 @@ interface VehicleAutomationDao {
 
     @Query("SELECT * FROM automations ORDER BY createdAt")
     suspend fun all(): List<VehicleAutomation>
+
+    @Query("SELECT * FROM automations ORDER BY createdAt")
+    fun observeAll(): Flow<List<VehicleAutomation>>
 
     @Query("SELECT * FROM automations WHERE vin = :vin ORDER BY createdAt")
     suspend fun forVin(vin: String): List<VehicleAutomation>

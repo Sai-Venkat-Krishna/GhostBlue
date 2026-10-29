@@ -440,7 +440,7 @@ class AccountController(
                     ?: throw APIError.logError("Vehicle not found in fetched data", apiName = "BBAccount")
                 match.vehicleKey?.let { vehicleKeys[vin] = it }
             }
-            // Ongoing notifications for long-running commands arrive in phase 4.
+            // The app shows progress for widget and tile commands (its CommandWorker).
             val target = db.vehicles().byVin(vin)?.toApiVehicle() ?: vehicle.toApiVehicle()
             withReauthentication { api, token -> api.sendCommand(target, command, token) }
             activity.finish(CommandActivityState.SUCCEEDED)

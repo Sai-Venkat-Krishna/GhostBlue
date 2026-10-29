@@ -33,6 +33,22 @@ enum class AppRefreshInterval(val minutes: Int, val displayName: String) {
     }
 }
 
+/** How often widgets and background work refresh the cars, as iOS's `WidgetRefreshInterval` (hours). */
+enum class WidgetRefreshInterval(val hours: Int, val displayName: String) {
+    ONE_HOUR(1, "1 hour"),
+    TWO_HOURS(2, "2 hours"),
+    THREE_HOURS(3, "3 hours"),
+    FOUR_HOURS(4, "4 hours"),
+    SIX_HOURS(6, "6 hours"),
+    TWELVE_HOURS(12, "12 hours");
+
+    val seconds: Double get() = hours * 3600.0
+
+    companion object {
+        fun fromHours(hours: Int): WidgetRefreshInterval = entries.firstOrNull { it.hours == hours } ?: FOUR_HOURS
+    }
+}
+
 /**
  * The owner's preferences: the port of iOS's `AppSettings`, with the same
  * keys and defaults where the setting exists on both. Each one is a
@@ -90,6 +106,36 @@ class AppSettings(private val prefs: SharedPreferences) {
 
     /** Trips saved after this get a badge on the Trips tab. */
     val lastViewedTripsDate: StateFlow<Instant> = _lastViewedTripsDate.asStateFlow()
+
+    private val _notificationsEnabled = MutableStateFlow(prefs.getBoolean(NOTIFICATIONS_ENABLED, false))
+
+    /** Vehicle alerts, reminders and smart-charging results as notifications. Off until the owner turns it on, as on iOS. */
+    val notificationsEnabled: StateFlow<Boolean> = _notificationsEnabled.asStateFlow()
+
+    private val _liveProgress = MutableStateFlow(prefs.getBoolean(LIVE_ACTIVITIES_ENABLED, false))
+
+    /** An ongoing notification while a command waits or the car charges: Android's Live Activity. */
+    val liveProgress: StateFlow<Boolean> = _liveProgress.asStateFlow()
+
+    private val _widgetRefreshInterval = MutableStateFlow(WidgetRefreshInterval.fromHours(prefs.getInt(WIDGET_REFRESH_INTERVAL, 0)))
+    val widgetRefreshInterval: StateFlow<WidgetRefreshInterval> = _widgetRefreshInterval.asStateFlow()
+
+    private val _quietHoursEnabled = MutableStateFlow(prefs.getBoolean(QUIET_HOURS_ENABLED, false))
+    val quietHoursEnabled: StateFlow<Boolean> = _quietHoursEnabled.asStateFlow()
+
+    private val _quietHoursStart = MutableStateFlow(prefs.getInt(QUIET_HOURS_START, 22))
+    val quietHoursStart: StateFlow<Int> = _quietHoursStart.asStateFlow()
+
+    private val _quietHoursEnd = MutableStateFlow(prefs.getInt(QUIET_HOURS_END, 7))
+    val quietHoursEnd: StateFlow<Int> = _quietHoursEnd.asStateFlow()
+
+    /** Whether [hour] falls in quiet hours (which may wrap past midnight). */
+    fun isQuietHour(hour: Int): Boolean {
+        if (!quietHoursEnabled.value) return false
+        val start = quietHoursStart.value
+        val end = quietHoursEnd.value
+        return if (start <= end) hour in start until end else hour >= start || hour < end
+    }
 
     private val _selectedVin = MutableStateFlow(prefs.getString(SELECTED_VIN, null))
 
@@ -151,6 +197,28 @@ class AppSettings(private val prefs: SharedPreferences) {
         prefs.edit().putLong(LAST_VIEWED_TRIPS_DATE, value.epochSecond).apply()
     }
 
+    fun setNotificationsEnabled(value: Boolean) {
+        _notificationsEnabled.value = value
+        prefs.edit().putBoolean(NOTIFICATIONS_ENABLED, value).apply()
+    }
+
+    fun setLiveProgress(value: Boolean) {
+        _liveProgress.value = value
+        prefs.edit().putBoolean(LIVE_ACTIVITIES_ENABLED, value).apply()
+    }
+
+    fun setWidgetRefreshInterval(value: WidgetRefreshInterval) {
+        _widgetRefreshInterval.value = value
+        prefs.edit().putInt(WIDGET_REFRESH_INTERVAL, value.hours).apply()
+    }
+
+    fun setQuietHours(enabled: Boolean, start: Int = quietHoursStart.value, end: Int = quietHoursEnd.value) {
+        _quietHoursEnabled.value = enabled
+        _quietHoursStart.value = start
+        _quietHoursEnd.value = end
+        prefs.edit().putBoolean(QUIET_HOURS_ENABLED, enabled).putInt(QUIET_HOURS_START, start).putInt(QUIET_HOURS_END, end).apply()
+    }
+
     fun setSelectedVin(value: String?) {
         _selectedVin.value = value
         prefs.edit().putString(SELECTED_VIN, value).apply()
@@ -168,6 +236,12 @@ class AppSettings(private val prefs: SharedPreferences) {
         const val SHOW_SHORT_TRIPS = "ShowShortTrips"
         const val HIDE_VEHICLE_LOCATION = "HideVehicleLocation"
         const val REDACT_PRIVATE_LOCATIONS = "RedactPrivateLocations"
+        const val NOTIFICATIONS_ENABLED = "NotificationsEnabled"
+        const val LIVE_ACTIVITIES_ENABLED = "LiveActivitiesEnabled"
+        const val WIDGET_REFRESH_INTERVAL = "WidgetRefreshInterval"
+        const val QUIET_HOURS_ENABLED = "QuietHoursEnabled"
+        const val QUIET_HOURS_START = "QuietHoursStart"
+        const val QUIET_HOURS_END = "QuietHoursEnd"
         const val TRIPS_DETAILED_MODE = "TripsDetailedMode"
         const val LAST_VIEWED_TRIPS_DATE = "LastViewedTripsDate"
 

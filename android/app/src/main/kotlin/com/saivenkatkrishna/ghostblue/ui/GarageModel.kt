@@ -8,6 +8,7 @@ import com.saivenkatkrishna.ghostblue.kit.api.APIClientConfiguration
 import com.saivenkatkrishna.ghostblue.data.backup.BackupArchive
 import com.saivenkatkrishna.ghostblue.data.backup.BackupMergeSummary
 import com.saivenkatkrishna.ghostblue.data.backup.BackupTransfer
+import com.saivenkatkrishna.ghostblue.data.charging.SDGESmartChargingSchedule
 import com.saivenkatkrishna.ghostblue.data.charging.SmartChargingOverride
 import com.saivenkatkrishna.ghostblue.data.charging.VehicleRefreshPolicy
 import com.saivenkatkrishna.ghostblue.data.charging.setChargingOverride
@@ -18,6 +19,9 @@ import com.saivenkatkrishna.ghostblue.data.model.BBVehicle
 import com.saivenkatkrishna.ghostblue.data.model.ChargeSession
 import com.saivenkatkrishna.ghostblue.data.model.ClimatePreset
 import com.saivenkatkrishna.ghostblue.data.model.TripRecord
+import com.saivenkatkrishna.ghostblue.data.model.secondsBetween
+import com.saivenkatkrishna.ghostblue.data.model.VehicleAutomation
+import com.saivenkatkrishna.ghostblue.data.model.VehicleAutomationKind
 import com.saivenkatkrishna.ghostblue.data.vehicle.StatusWaitingManager
 import com.saivenkatkrishna.ghostblue.kit.api.fake.FakeVehicleRecord
 import com.saivenkatkrishna.ghostblue.kit.model.APIError
@@ -38,7 +42,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -150,6 +156,39 @@ class GarageModel(
 
     fun httpLogs(): Flow<List<BBHTTPLog>> = db.httpLogs().observeAll()
 
+    fun automations(vin: String): Flow<List<VehicleAutomation>> =
+        db.automations().observeAll().map { list -> list.filter { it.vin == vin } }
+
+    /**
+     * Turns one of the car's rules on or off, as iOS's ownership hub: one
+     * rule of each kind per car, created the first time it's turned on.
+     */
+    fun setAutomation(vin: String, kind: VehicleAutomationKind, enabled: Boolean, threshold: Int? = null, hour: Int? = null, minute: Int? = null) {
+        scope.launch {
+            db.withTransaction {
+                val existing = db.automations().forVin(vin).firstOrNull { it.kind == kind }
+                if (existing == null) {
+                    if (!enabled) return@withTransaction
+                    val name = db.vehicles().byVin(vin)?.displayName ?: "Vehicle"
+                    val title = when (kind) {
+                        VehicleAutomationKind.LOW_BATTERY -> "Charge $name"
+                        VehicleAutomationKind.UNPLUGGED -> "$name unplugged"
+                        VehicleAutomationKind.PRECONDITION_REMINDER -> "Precondition $name"
+                    }
+                    db.automations().insert(
+                        VehicleAutomation(vin, title, kind, threshold ?: 20, hour ?: 7, minute ?: 30),
+                    )
+                } else {
+                    existing.isEnabled = enabled
+                    threshold?.let { existing.threshold = it }
+                    hour?.let { existing.hour = it }
+                    minute?.let { existing.minute = it }
+                    db.automations().update(existing)
+                }
+            }
+        }
+    }
+
     fun account(id: UUID?): BBAccount? = accounts.value?.firstOrNull { it.id == id }
 
     fun commandState(vin: String, kind: CommandKind): CommandState = _commands.value[vin to kind] ?: CommandState()
@@ -206,6 +245,32 @@ class GarageModel(
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * While the app is open, as iOS: every minute each car with smart
+     * charging on is reconciled, unless its last run was under five minutes
+     * ago and after the latest schedule boundary.
+     */
+    suspend fun runSmartChargingChecks() {
+        while (currentCoroutineContext().isActive) {
+            val now = Instant.now()
+            val boundary = SDGESmartChargingSchedule.mostRecentTransition(now)
+            for (vehicle in db.vehicles().all().filter { it.smartChargingEnabled }) {
+                val lastRun = vehicle.smartChargingLastRunAt
+                val recent = lastRun != null && secondsBetween(lastRun, now) < SMART_CHARGING_RECHECK_SECONDS &&
+                    (boundary == null || lastRun >= boundary)
+                if (recent) continue
+                try {
+                    controller(vehicle.vin).reconcileSmartCharging(vehicle.vin)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    // Recorded on the car as its last result.
+                }
+            }
+            delay(60_000)
         }
     }
 
@@ -685,6 +750,7 @@ class GarageModel(
     companion object {
         /** Data older than this is refreshed on open and by the timer, as on iOS. */
         const val STALE_SECONDS = 300.0
+        const val SMART_CHARGING_RECHECK_SECONDS = 300.0
         const val ERROR_DISPLAY_MILLIS = 4_000L
         const val UNDO_MILLIS = 5_000L
         const val TRIP_DELETED_MESSAGE = "Trip deleted"

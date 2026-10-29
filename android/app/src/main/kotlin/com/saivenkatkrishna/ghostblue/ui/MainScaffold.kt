@@ -42,6 +42,7 @@ import com.saivenkatkrishna.ghostblue.ui.trips.TripsScreen
 import java.time.Instant
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.launch
 
 enum class Destination(val label: String, val icon: ImageVector) {
     HOME("Home", Icons.Rounded.DirectionsCar),
@@ -66,7 +67,7 @@ class Reselections {
  * window size. Settings is a tab, as Android apps do, rather than a sheet.
  */
 @Composable
-fun MainScaffold(incomingBackup: MutableStateFlow<Uri?>) {
+fun MainScaffold(incomingBackup: MutableStateFlow<Uri?>, openVehicle: MutableStateFlow<String?> = MutableStateFlow(null)) {
     val graph = LocalAppGraph.current
     val garage = graph.garage
     var destination by rememberSaveable { mutableStateOf(Destination.HOME) }
@@ -82,7 +83,10 @@ fun MainScaffold(incomingBackup: MutableStateFlow<Uri?>) {
     // The selected car refreshes on the timer while the app is in front.
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(lifecycle) {
-        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { garage.runAutoRefresh() }
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            launch { garage.runAutoRefresh() }
+            launch { garage.runSmartChargingChecks() }
+        }
     }
     LaunchedEffect(Unit) {
         garage.messages.collect { message ->
@@ -97,6 +101,14 @@ fun MainScaffold(incomingBackup: MutableStateFlow<Uri?>) {
     // Trips archived while the tab is open count as seen.
     LaunchedEffect(destination, trips.size) {
         if (destination == Destination.TRIPS) graph.settings.setLastViewedTripsDate(Instant.now())
+    }
+    // A widget, tile or notification opened the app on a car: Home shows it.
+    val vehicleRequest by openVehicle.collectAsStateWithLifecycle()
+    LaunchedEffect(vehicleRequest) {
+        if (vehicleRequest != null) {
+            destination = Destination.HOME
+            openVehicle.value = null
+        }
     }
     // A backup opened from another app goes to Settings, which shows the import sheet.
     LaunchedEffect(pendingBackup) {

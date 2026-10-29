@@ -41,6 +41,7 @@ fun GhostBlueApp(
     incomingBackup: MutableStateFlow<Uri?> = MutableStateFlow(null),
     mapContent: MapContent = GoogleMapContent,
     remoteImages: Boolean = true,
+    openVehicle: MutableStateFlow<String?> = MutableStateFlow(null),
 ) {
     val settings = graph.settings
     val theme by settings.theme.collectAsStateWithLifecycle()
@@ -67,7 +68,7 @@ fun GhostBlueApp(
                 when {
                     current == null -> LoadingIndicator(Modifier.size(72.dp).align(Alignment.Center))
                     onboarding -> OnboardingFlow(incomingBackup)
-                    else -> MainScaffold(incomingBackup)
+                    else -> MainScaffold(incomingBackup, openVehicle)
                 }
             }
         }

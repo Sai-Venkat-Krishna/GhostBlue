@@ -86,6 +86,9 @@ dependencies {
     implementation(libs.play.services.maps)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    implementation(libs.glance.appwidget)
+    implementation(libs.glance.material3)
+    implementation(libs.work.runtime)
 
     // Compose UI tests run under Robolectric, so they need no emulator.
     testImplementation(libs.junit4)
@@ -95,5 +98,7 @@ dependencies {
     testImplementation(libs.androidx.test.core)
     testImplementation(platform(libs.compose.bom))
     testImplementation(libs.compose.ui.test.junit4)
+    testImplementation(libs.work.testing)
+    testImplementation(libs.glance.testing)
     debugImplementation(libs.compose.ui.test.manifest)
 }

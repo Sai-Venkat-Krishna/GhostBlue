@@ -1,3 +1,10 @@
 <resources>
     <string name="app_name">GhostBlue</string>
+    <string name="widget_vehicle_name">Command Center</string>
+    <string name="widget_vehicle_description">Your car\'s charge and range, with lock and climate buttons.</string>
+    <string name="widget_dial_name">Charge Dial</string>
+    <string name="widget_dial_description">The battery as a dial; wider, the lock state and buttons too.</string>
+    <string name="tile_lock">Lock</string>
+    <string name="tile_climate">Climate</string>
+    <string name="tile_charge">Charging</string>
 </resources>

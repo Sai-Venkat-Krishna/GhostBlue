@@ -56,7 +56,8 @@ private object RivianTokens {
     val goldSoft = Color(0xFFFFC747)
 }
 
-private val RivianLight = lightColorScheme(
+/** Public so the widgets can use the Rivian palette too. */
+val RivianLightColors = lightColorScheme(
     primary = Color(0xFF111113),
     onPrimary = Color(0xFFFFFFFF),
     primaryContainer = Color(0xFFE6E6E3),
@@ -85,7 +86,7 @@ private val RivianLight = lightColorScheme(
     error = Color(0xFFD93A3A),
 )
 
-private val RivianDark = darkColorScheme(
+val RivianDarkColors = darkColorScheme(
     primary = Color(0xFFF2F2F0),
     onPrimary = Color(0xFF111113),
     primaryContainer = Color(0xFF2A2A2D),
@@ -179,7 +180,7 @@ fun GhostBlueTheme(
     content: @Composable () -> Unit,
 ) {
     val colorScheme = when {
-        theme == AppTheme.RIVIAN -> if (darkTheme) RivianDark else RivianLight
+        theme == AppTheme.RIVIAN -> if (darkTheme) RivianDarkColors else RivianLightColors
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)

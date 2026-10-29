@@ -11,7 +11,7 @@ import java.time.Instant
 import kotlin.math.floor
 import kotlinx.serialization.Serializable
 
-/** Where vehicle alerts go. The app installs one that posts notifications (phase 4); until then they are dropped. */
+/** Where vehicle alerts go. The app installs its notifier; without one they are dropped. */
 fun interface VehicleAlertSink {
     fun post(vin: String, title: String, body: String)
 }

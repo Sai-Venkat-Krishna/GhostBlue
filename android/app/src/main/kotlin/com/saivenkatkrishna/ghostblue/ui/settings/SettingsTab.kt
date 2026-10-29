@@ -1,6 +1,35 @@
 package com.saivenkatkrishna.ghostblue.ui.settings
 
+import android.Manifest
+import android.app.AlarmManager
+import android.app.StatusBarManager
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Intent
+import androidx.compose.material.icons.rounded.AddToHomeScreen
+import androidx.compose.material.icons.rounded.Tune
+import com.saivenkatkrishna.ghostblue.R
+import com.saivenkatkrishna.ghostblue.widgets.ChargeDialWidgetReceiver
+import com.saivenkatkrishna.ghostblue.widgets.ChargeTileService
+import com.saivenkatkrishna.ghostblue.widgets.ClimateTileService
+import com.saivenkatkrishna.ghostblue.widgets.LockTileService
+import com.saivenkatkrishna.ghostblue.widgets.VehicleWidgetReceiver
+import android.content.pm.PackageManager
+import android.os.Build
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.rounded.Alarm
+import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.WbSunny
+import androidx.compose.material.icons.rounded.Widgets
+import androidx.core.content.ContextCompat
+import com.saivenkatkrishna.ghostblue.background.SmartChargingScheduler
+import com.saivenkatkrishna.ghostblue.settings.WidgetRefreshInterval
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -80,6 +109,7 @@ import com.saivenkatkrishna.ghostblue.settings.AppRefreshInterval
 import com.saivenkatkrishna.ghostblue.settings.AppTheme
 import com.saivenkatkrishna.ghostblue.ui.components.cardToggleColors
 import com.saivenkatkrishna.ghostblue.ui.LocalAppGraph
+import com.saivenkatkrishna.ghostblue.ui.home.VehicleAlertSettings
 import com.saivenkatkrishna.ghostblue.ui.home.VehicleSettingsContent
 import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -178,6 +208,8 @@ private fun SettingsRoot(onOpen: (SettingsRoute) -> Unit) {
                     Section("Units")
                     ChoiceRow("Distance", Icons.Rounded.Straighten, Distance.Units.entries, distanceUnit, { it.displayName }, settings::setDistanceUnit, tag = "distance")
                     ChoiceRow("Temperature", Icons.Rounded.Thermostat, Temperature.Units.entries, temperatureUnit, { it.symbol }, settings::setTemperatureUnit, tag = "temperature")
+
+                    NotificationSettings()
 
                     Section("App")
                     MenuRow("Background refresh", refreshInterval.displayName, Icons.Rounded.Refresh, AppRefreshInterval.entries, { it.displayName }, settings::setRefreshInterval)
@@ -432,6 +464,7 @@ private fun VehicleScreen(vin: String, onBack: () -> Unit) {
     SubScreen(vehicle.displayName, onBack) { padding ->
         Column(Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
             VehicleSettingsContent(vehicle)
+            VehicleAlertSettings(vehicle)
         }
     }
 }
@@ -459,6 +492,91 @@ private fun AboutScreen(onBack: () -> Unit) {
                 colors = transparentListColors(),
             )
             Footer("GhostBlue for Android, built with Jetpack Compose and Material 3 Expressive. Not affiliated with Hyundai or Kia.")
+        }
+    }
+}
+
+/**
+ * Notifications, widgets and background work, as iOS's Widget Settings and
+ * quiet hours. Turning notifications on asks Android's permission and
+ * stays off if it's refused, as iOS's switch does.
+ */
+@Composable
+private fun NotificationSettings() {
+    val graph = LocalAppGraph.current
+    val settings = graph.settings
+    val context = LocalContext.current
+    val enabled by settings.notificationsEnabled.collectAsStateWithLifecycle()
+    val live by settings.liveProgress.collectAsStateWithLifecycle()
+    val quiet by settings.quietHoursEnabled.collectAsStateWithLifecycle()
+    val quietStart by settings.quietHoursStart.collectAsStateWithLifecycle()
+    val quietEnd by settings.quietHoursEnd.collectAsStateWithLifecycle()
+    val widgetInterval by settings.widgetRefreshInterval.collectAsStateWithLifecycle()
+    val vehicles by graph.garage.vehicles.collectAsStateWithLifecycle()
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        settings.setNotificationsEnabled(granted)
+        if (!granted) graph.garage.post("Notifications are off for GhostBlue in Android settings.")
+    }
+    fun hour(value: Int) = LocalTime.of(value, 0).format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
+
+    Section("Notifications")
+    SwitchListRow("Notifications", "Vehicle alerts, reminders and smart charging", enabled, onChange = { on ->
+        when {
+            !on -> settings.setNotificationsEnabled(false)
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED ->
+                permission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            else -> settings.setNotificationsEnabled(true)
+        }
+    }, icon = Icons.Rounded.Notifications)
+    if (enabled) {
+        SwitchListRow(
+            "Live progress",
+            "An ongoing notification while a car charges. Beta",
+            live,
+            onChange = settings::setLiveProgress,
+        )
+        SwitchListRow("Quiet hours", "Hold vehicle alerts from ${hour(quietStart)} to ${hour(quietEnd)}", quiet, onChange = { settings.setQuietHours(it) })
+        if (quiet) {
+            MenuRow("Quiet from", hour(quietStart), Icons.Rounded.Bedtime, (0..23).toList(), ::hour) { settings.setQuietHours(true, start = it) }
+            MenuRow("Quiet until", hour(quietEnd), Icons.Rounded.WbSunny, (0..23).toList(), ::hour) { settings.setQuietHours(true, end = it) }
+        }
+    }
+    Section("Widgets & tiles")
+    MenuRow("Widget refresh", widgetInterval.displayName, Icons.Rounded.Widgets, WidgetRefreshInterval.entries, { it.displayName }, settings::setWidgetRefreshInterval)
+    Footer("How often widgets, tiles and alerts check the cars while the app is closed; every ten minutes while one is plugged in.")
+    val widgets = AppWidgetManager.getInstance(context)
+    if (widgets.isRequestPinAppWidgetSupported) {
+        NavRow("Add Command Center widget", "Charge, range, lock and climate", Icons.Rounded.AddToHomeScreen, tag = "addVehicleWidget") {
+            widgets.requestPinAppWidget(ComponentName(context, VehicleWidgetReceiver::class.java), null, null)
+        }
+        NavRow("Add Charge Dial widget", "The battery as a dial", Icons.Rounded.AddToHomeScreen, tag = "addDialWidget") {
+            widgets.requestPinAppWidget(ComponentName(context, ChargeDialWidgetReceiver::class.java), null, null)
+        }
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val statusBar = context.getSystemService(StatusBarManager::class.java)
+        listOf(
+            Triple("Lock", LockTileService::class.java, R.drawable.ic_lock),
+            Triple("Climate", ClimateTileService::class.java, R.drawable.ic_climate),
+            Triple("Charging", ChargeTileService::class.java, R.drawable.ic_bolt),
+        ).forEach { (label, service, icon) ->
+            NavRow("Add $label tile", "To Quick Settings, for the selected car", Icons.Rounded.Tune, tag = "add${label}Tile") {
+                statusBar.requestAddTileService(
+                    ComponentName(context, service),
+                    label,
+                    android.graphics.drawable.Icon.createWithResource(context, icon),
+                    context.mainExecutor,
+                ) {}
+            }
+        }
+    }
+    val alarms = context.getSystemService(AlarmManager::class.java)
+    if (vehicles.orEmpty().any { it.smartChargingEnabled } && !SmartChargingScheduler.canScheduleExact(alarms)) {
+        NavRow("Allow exact alarms", "Smart charging runs right at each SDG&E boundary", Icons.Rounded.Alarm) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                context.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}")))
+            }
         }
     }
 }

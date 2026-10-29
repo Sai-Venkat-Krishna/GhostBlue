@@ -24,7 +24,7 @@ const val TEST_PASSWORD = "betterblue"
 fun testGraph(): AppGraph {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val prefs = context.getSharedPreferences("test-${UUID.randomUUID()}", Context.MODE_PRIVATE)
-    return AppGraph(GhostBlueDatabase.inMemory(context), AppSettings(prefs), commandWaitSeconds = 0)
+    return AppGraph(context, GhostBlueDatabase.inMemory(context), AppSettings(prefs), commandWaitSeconds = 0)
 }
 
 /** Signs in as the test account (three test cars) without going through the screens. */

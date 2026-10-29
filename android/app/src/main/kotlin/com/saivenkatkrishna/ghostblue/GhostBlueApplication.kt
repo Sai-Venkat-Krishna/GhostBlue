@@ -12,32 +12,95 @@ import com.saivenkatkrishna.ghostblue.kit.logging.BBLogLevel
 import com.saivenkatkrishna.ghostblue.kit.logging.BBLogSink
 import com.saivenkatkrishna.ghostblue.kit.logging.BBLogger
 import com.saivenkatkrishna.ghostblue.settings.AppSettings
+import androidx.glance.appwidget.updateAll
+import com.saivenkatkrishna.ghostblue.background.RefreshWorker
+import com.saivenkatkrishna.ghostblue.background.ReminderScheduler
+import com.saivenkatkrishna.ghostblue.background.SmartChargingScheduler
+import com.saivenkatkrishna.ghostblue.data.vehicle.VehicleAlerts
+import com.saivenkatkrishna.ghostblue.data.vehicle.VehicleStatusEvents
+import com.saivenkatkrishna.ghostblue.notifications.ChargingProgress
+import com.saivenkatkrishna.ghostblue.notifications.Notifier
 import com.saivenkatkrishna.ghostblue.ui.GarageModel
+import com.saivenkatkrishna.ghostblue.widgets.ChargeDialWidget
+import com.saivenkatkrishna.ghostblue.widgets.VehicleTiles
+import com.saivenkatkrishna.ghostblue.widgets.VehicleWidget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 /**
- * What every screen shares for the life of the process: the database, the
- * owner's settings, one [AccountControllers] (so a client and its token are
- * shared) and the [GarageModel] the screens observe and act through.
+ * What every screen, widget, tile and worker shares for the life of the
+ * process: the database, the owner's settings, one [AccountControllers] (so
+ * a client and its token are shared), the [GarageModel] the screens act
+ * through and the [Notifier].
  */
 class AppGraph(
+    private val context: Context,
     val db: GhostBlueDatabase,
     val settings: AppSettings,
     val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     deviceType: DeviceType = DeviceType.PHONE,
     /** Seconds the command checks wait between reads; tests shorten it. */
-    commandWaitSeconds: Int = 10,
+    val commandWaitSeconds: Int = 10,
 ) {
     val logSinks = HTTPLogSinkManager(db, scope, deviceType, isEnabled = { settings.debugMode.value })
     val controllers = AccountControllers(db, scope, logSinks, sourceName = deviceType.displayName)
     val garage = GarageModel(db, settings, controllers, scope, commandWaitSeconds)
+    val notifier = Notifier(context, settings)
+    val chargingProgress = ChargingProgress(notifier, settings, db)
+
+    /** Redraws the widgets and asks the tiles to re-read the car. */
+    suspend fun refreshWidgets() {
+        runCatching {
+            VehicleWidget().updateAll(context)
+            ChargeDialWidget().updateAll(context)
+        }.onFailure { BBLogger.warning(BBLogCategory.APP, "Widget update failed: $it") }
+        VehicleTiles.requestUpdate(context)
+    }
+
+    /** Can anything outside the app show this car? A change reschedules what depends on it. */
+    suspend fun rescheduleBackgroundWork() {
+        RefreshWorker.schedule(context)
+        SmartChargingScheduler.schedule(context)
+        ReminderScheduler.schedule(context)
+    }
+
+    /**
+     * The process-wide work the app runs (not tests): alerts as notifications,
+     * widgets and tiles following every status, and the scheduled refreshes,
+     * smart-charging runs and reminders.
+     */
+    @OptIn(FlowPreview::class)
+    fun startBackgroundWork() {
+        notifier.createChannels()
+        VehicleAlerts.sink = notifier
+        scope.launch {
+            VehicleStatusEvents.statusUpdated.collect { vin -> chargingProgress.update(vin) }
+        }
+        scope.launch {
+            VehicleStatusEvents.statusUpdated.debounce(500).collect { refreshWidgets() }
+        }
+        scope.launch {
+            // Settings and car changes that move a schedule: the owner's interval, smart charging, reminders.
+            combine(
+                combine(settings.widgetRefreshInterval, settings.liveProgress, settings.notificationsEnabled) { a, b, c -> Triple(a, b, c) },
+                db.vehicles().observeAll().map { list -> list.map { Triple(it.vin, it.smartChargingEnabled, it.evStatus?.pluggedIn) } },
+                db.automations().observeAll(),
+                db.maintenanceReminders().observeAll(),
+            ) { _, _, _, _ -> }.debounce(1_000).collect { rescheduleBackgroundWork() }
+        }
+    }
 
     companion object {
         fun create(context: Context): AppGraph {
             val isTablet = context.resources.configuration.smallestScreenWidthDp >= 600
             return AppGraph(
+                context = context.applicationContext,
                 db = GhostBlueDatabase.get(context),
                 settings = AppSettings(context),
                 deviceType = if (isTablet) DeviceType.TABLET else DeviceType.PHONE,
@@ -46,15 +109,21 @@ class AppGraph(
     }
 }
 
-class GhostBlueApplication : Application() {
+open class GhostBlueApplication : Application() {
     lateinit var graph: AppGraph
         private set
 
     override fun onCreate() {
         super.onCreate()
         BBLogger.sink = LogcatSink
-        graph = AppGraph.create(this)
+        graph = createGraph()
+        startBackgroundWork()
     }
+
+    /** Tests swap in an in-memory graph. */
+    protected open fun createGraph(): AppGraph = AppGraph.create(this)
+
+    protected open fun startBackgroundWork() = graph.startBackgroundWork()
 }
 
 /** Sends the vehicle API's log lines to Logcat under "GhostBlue/<category>". */

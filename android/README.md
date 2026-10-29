@@ -2,15 +2,15 @@
 
 The Android version of GhostBlue, built natively in Kotlin with Jetpack Compose
 and **Material 3 Expressive**. It's being ported in phases; this folder holds
-phases 1 to 3.
+phases 1 to 4.
 
 | Phase | What | State |
 |---|---|---|
 | 1 | Vehicle API in Kotlin (BetterBlueKit port): Hyundai USA, test car, tests | **Done** |
 | 2 | Storage (Room), charge-session detection, smart charging, backups in both directions | **Done** |
 | 3 | Screens: Home, Location, Energy, Trips, Settings; foldable layouts | **Done** |
-| 4 | Widgets, Quick Settings tiles, notifications, background automation | Next |
-| 5 | Wear OS | |
+| 4 | Widgets, Quick Settings tiles, notifications, background automation | **Done** |
+| 5 | Wear OS | Next |
 
 ## Modules
 
@@ -73,12 +73,36 @@ phases 1 to 3.
     and file picker (and `.ghostbluebackup` files opened from other apps),
     HTTP logs and about.
   - Layouts use two columns from 600 dp wide, as iOS's `AdaptiveLayout`.
+  - `widgets/`: Glance widgets for iOS's Command Center (small, medium and
+    large, with lock and climate buttons and a refresh) and Charge Dial,
+    each optionally pinned to a car; Quick Settings tiles for lock, climate
+    and charging that show the selected car's state (unlocking from a locked
+    phone asks for the phone to be unlocked).
+  - `background/`: WorkManager and alarms, since Android has no widget
+    timelines or Shortcuts. `RefreshWorker` refreshes the cars every widget
+    refresh interval (ten minutes while plugged in, five while a charging
+    notification is up); `CommandWorker` runs widget and tile commands and
+    shows their progress; `SmartChargingScheduler` runs smart charging just
+    after each SDG&E boundary (exact when the owner allows exact alarms),
+    which iOS leaves to Shortcuts automations; `ReminderScheduler` posts
+    precondition reminders daily and dated maintenance at 9 AM on its day.
+    Alarms are set again after a reboot, an update or a clock change.
+  - `notifications/`: the data layer's alerts as notifications, on their own
+    channels, with iOS's switch and quiet hours; a charging notification
+    kept current while a car charges (iOS's Live Activity, behind the same
+    beta switch).
 
-  iOS screens not ported in phase 3: rearranging Home's sections, the ABRP
-  route planner, the ownership hub (maintenance reminders, automations), the
-  test-car editor, the verification-code (MFA) prompt, Face ID lock,
-  troubleshooting and the debug export. Smart charging runs only from
-  "Check charging now" until phase 4 schedules it.
+  Where Android differs from iOS: smart charging posts what it changed
+  (iOS shows it only in Shortcuts); widget and tile commands wait for the
+  car and show progress, where iOS's intents only send; there are no lock
+  screen widgets or Dynamic Island. Each car's alert rules and its
+  low-battery, unplugged and precondition automations are in Settings ›
+  Vehicles.
+
+  iOS screens not ported yet: rearranging Home's sections, the ABRP route
+  planner, the rest of the ownership hub (maintenance reminders are kept
+  and notified, but not edited), the test-car editor, the verification-code
+  (MFA) prompt, Face ID lock, troubleshooting and the debug export.
 
 Not ported yet: Kia USA, Hyundai Canada and Europe, and MFA. The factory
 reports these as not yet supported; unlike iOS, which falls back to the test
@@ -91,8 +115,7 @@ Where the data layer differs from iOS:
 - `AccountController` addresses cars by VIN and reads the current row at every
   step, rather than holding a model object, so a change made elsewhere (a
   screen, the test car's server) is never overwritten by a stale copy.
-- Alerts go to `VehicleAlerts.sink`, which posts nothing until phase 4 adds
-  notifications. Live Activity hooks and reminder scheduling are phase 4 too.
+- Alerts go to `VehicleAlerts.sink`; the app installs its notifier there.
 
 ## Build and test
 
@@ -111,7 +134,8 @@ The `data` tests run Room under Robolectric, so they need no emulator. So do
 the `app` tests: Compose UI tests of the main flows against the test car
 (signing in, lock and climate, each tab, units, the Rivian theme, a manual
 charging session, trips, privacy, backups, HTTP logs), the two-column layouts
-at a Pixel Fold's inner-screen size, and the screens' ported rules. They
+at a Pixel Fold's inner-screen size, the screens' ported rules, and phase
+4's workers, schedules, tiles and widget content. They
 include ports of the iOS suites (EnergySessionAccuracy, ChargingReliability,
 SmartChargingAutomation, WakeUpReduction, BackupArchive, BackupTransfer,
 VehicleArchive, OwnershipFeature) with the smart-charging waits on virtual time.

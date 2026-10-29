@@ -13,13 +13,16 @@ class MainActivity : ComponentActivity() {
     /** A backup file opened from another app, waiting for the import sheet. */
     private val incomingBackup = MutableStateFlow<Uri?>(null)
 
+    /** A car a widget, tile or notification opened the app on; Home shows it. */
+    private val openVehicle = MutableStateFlow<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         if (savedInstanceState == null) handle(intent)
         val graph = (application as GhostBlueApplication).graph
         setContent {
-            GhostBlueApp(graph, incomingBackup)
+            GhostBlueApp(graph, incomingBackup, openVehicle = openVehicle)
         }
     }
 
@@ -29,9 +32,21 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handle(intent: Intent?) {
+        if (intent?.action == ACTION_OPEN_VEHICLE) {
+            intent.getStringExtra(EXTRA_VIN)?.let { vin ->
+                (application as GhostBlueApplication).graph.garage.selectVehicle(vin)
+                openVehicle.value = vin
+            }
+            return
+        }
         if (intent?.action == Intent.ACTION_VIEW || intent?.action == Intent.ACTION_SEND) {
             val uri = intent.data ?: @Suppress("DEPRECATION") intent.getParcelableExtra(Intent.EXTRA_STREAM)
             if (uri != null) incomingBackup.value = uri
         }
+    }
+
+    companion object {
+        const val ACTION_OPEN_VEHICLE = "com.saivenkatkrishna.ghostblue.OPEN_VEHICLE"
+        const val EXTRA_VIN = "vin"
     }
 }

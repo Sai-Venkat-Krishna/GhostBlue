@@ -1,0 +1,4 @@
+<resources>
+    <!-- GhostBlue's blue, the fallback palette's primary. -->
+    <color name="ic_launcher_background">#2456C6</color>
+</resources>
