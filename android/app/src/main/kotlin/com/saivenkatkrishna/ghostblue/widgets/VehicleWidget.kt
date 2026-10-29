@@ -6,6 +6,8 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.DpSize
@@ -22,6 +24,7 @@ import androidx.glance.action.Action
 import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.LinearProgressIndicator
 import androidx.glance.appwidget.SizeMode
@@ -56,23 +59,44 @@ import com.saivenkatkrishna.ghostblue.data.model.BBVehicle
 import com.saivenkatkrishna.ghostblue.settings.AppTheme
 import com.saivenkatkrishna.ghostblue.ui.theme.RivianDarkColors
 import com.saivenkatkrishna.ghostblue.ui.theme.RivianLightColors
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 
 private val Small = DpSize(110.dp, 110.dp)
 private val Medium = DpSize(250.dp, 110.dp)
 private val Large = DpSize(250.dp, 250.dp)
 
-/** Everything a widget draws, read before composing: the car, its image and the owner's theme. */
-internal data class WidgetState(val vehicle: WidgetVehicle?, val image: Bitmap?, val rivian: Boolean)
+/** Everything a widget draws: the car, its image, the owner's theme and the widget's accent (the Woven Wordmark's). */
+internal data class WidgetState(val vehicle: WidgetVehicle?, val image: Bitmap?, val rivian: Boolean, val accent: WidgetAccent = WidgetAccent.MINT)
 
-private suspend fun loadState(context: Context, id: GlanceId, withImage: Boolean): WidgetState {
+/**
+ * A widget's state as it changes: each status of the car, which car (pinned,
+ * else the selected one), the units, the theme and the widget's own settings. Collected inside the
+ * composition, so a widget whose session is still up (Glance keeps one for a
+ * while after each update, and drops updates that arrive meanwhile) redraws
+ * with every change instead of keeping what it opened with.
+ */
+internal fun widgetStates(context: Context, id: GlanceId, withImage: Boolean): Flow<WidgetState> {
     val graph = (context.applicationContext as GhostBlueApplication).graph
-    val vehicle: BBVehicle? = WidgetVehicles.resolve(graph.db.vehicles().all(), WidgetVehicles.vinFor(context, id), graph.settings.selectedVin.value)
-    val image = if (withImage && vehicle != null) loadVehicleBitmap(context, vehicle) else null
-    return WidgetState(
-        vehicle?.let { WidgetVehicle.from(it, graph.settings.distanceUnit.value) },
-        image,
-        graph.settings.theme.value == AppTheme.RIVIAN,
-    )
+    return combine(
+        graph.db.vehicles().observeAll(),
+        graph.settings.selectedVin,
+        graph.settings.distanceUnit,
+        graph.settings.theme,
+        WidgetVehicles.configChanges,
+    ) { vehicles, selected, unit, theme, _ ->
+        val appWidgetId = runCatching { GlanceAppWidgetManager(context).getAppWidgetId(id) }.getOrNull()
+        val vehicle: BBVehicle? = WidgetVehicles.resolve(vehicles, appWidgetId?.let { WidgetVehicles.pinned(context, it) }, selected)
+        WidgetState(
+            vehicle?.let { WidgetVehicle.from(it, unit) },
+            if (withImage && vehicle != null) loadVehicleBitmap(context, vehicle) else null,
+            theme == AppTheme.RIVIAN,
+            appWidgetId?.let { WidgetVehicles.accent(context, it) } ?: WidgetAccent.MINT,
+        )
+    }.distinctUntilChanged()
 }
 
 /** Material You colours, or the Rivian palette under the Rivian theme, as iOS's widgets switch layout. */
@@ -91,8 +115,10 @@ class VehicleWidget : GlanceAppWidget() {
     override val sizeMode = SizeMode.Responsive(setOf(Small, Medium, Large))
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val state = loadState(context, id, withImage = true)
+        val states = widgetStates(context, id, withImage = true)
+        val initial = states.first()
         provideContent {
+            val state by states.collectAsState(initial)
             WidgetTheme(state.rivian) { CommandCenter(state) }
         }
     }
@@ -328,9 +354,10 @@ class ChargeDialWidget : GlanceAppWidget() {
     override val sizeMode = SizeMode.Responsive(setOf(Small, Medium))
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val state = loadState(context, id, withImage = false)
-        val dial = state.vehicle?.let { drawDial(context, it) }
+        val states = widgetStates(context, id, withImage = false).map { state -> state to state.vehicle?.let { drawDial(context, it) } }
+        val initial = states.first()
         provideContent {
+            val (state, dial) = states.collectAsState(initial).value
             WidgetTheme(state.rivian) {
                 val vehicle = state.vehicle
                 Frame(vehicle?.vin) {

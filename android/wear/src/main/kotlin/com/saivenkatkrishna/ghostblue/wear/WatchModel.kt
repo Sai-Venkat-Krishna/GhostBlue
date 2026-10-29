@@ -17,6 +17,7 @@ import com.saivenkatkrishna.ghostblue.data.vehicle.StatusWaitingManager
 import com.saivenkatkrishna.ghostblue.kit.model.APIError
 import com.saivenkatkrishna.ghostblue.kit.model.Brand
 import com.saivenkatkrishna.ghostblue.kit.model.Region
+import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -30,10 +31,23 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** Which of a car's buttons a command belongs to. */
-enum class WatchControl { LOCK, CLIMATE, CHARGE }
+enum class WatchControl {
+    LOCK, CLIMATE, CHARGE;
+
+    companion object {
+        fun of(action: RemoteAction): WatchControl = when (action) {
+            RemoteAction.LOCK, RemoteAction.UNLOCK -> LOCK
+            RemoteAction.START_CLIMATE, RemoteAction.STOP_CLIMATE -> CLIMATE
+            RemoteAction.START_CHARGE, RemoteAction.STOP_CHARGE -> CHARGE
+        }
+    }
+}
 
 /** A button's command in flight: its progress, or how it ended. */
 data class WatchCommand(val action: RemoteAction, val running: Boolean, val text: String)
@@ -66,6 +80,9 @@ class WatchModel(
     private val _signingIn = MutableStateFlow(false)
     val signingIn: StateFlow<Boolean> = _signingIn.asStateFlow()
 
+    /** One account change at a time: a handoff and a sign-in (or two handoffs) mustn't both add the same login. */
+    private val accountLock = Mutex()
+
     private fun controller(vehicle: BBVehicle): AccountController? = vehicle.ownerAccountId?.let(controllers::controller)
 
     /** Opening a car reads the server's snapshot when its data is five minutes old; only the refresh button asks the car. */
@@ -95,12 +112,15 @@ class WatchModel(
     /** Sends [action] for the button's [control]; tapping again while it waits stops waiting, as iOS's stop button. */
     fun send(vin: String, control: WatchControl, action: RemoteAction) {
         val key = vin to control
-        jobs.remove(key)?.let { running ->
-            if (running.isActive) {
-                running.cancel()
+        val previous = jobs.remove(key)
+        if (previous != null && previous.isActive) {
+            val waiting = _commands.value[key]?.running == true
+            previous.cancel()
+            if (waiting) {
                 _commands.update { it - key }
                 return
             }
+            // It had finished and was only showing how: this tap sends.
         }
         fun set(command: WatchCommand?) = _commands.update { if (command == null) it - key else it + (key to command) }
         // Before launching, so the tile that sent it already draws it running.
@@ -118,7 +138,7 @@ class WatchModel(
             }
             delay(RESULT_MILLIS)
             set(null)
-            jobs.remove(key)
+            jobs.remove(key, coroutineContext.job)
         }
     }
 
@@ -127,8 +147,12 @@ class WatchModel(
         _signingIn.value = true
         return try {
             scope.async {
-                val account = AccountSetup.addAccount(db, controllers, username, password, pin, brand, region)
-                db.vehicles().ownedBy(account.id).firstOrNull()?.let { settings.setSelectedVin(it.vin) }
+                accountLock.withLock {
+                    val account = AccountSetup.addAccount(db, controllers, username, password, pin, brand, region)
+                    // Signed in here again: the phone's handoff may keep it current from now on.
+                    settings.signedOutLogins -= AccountHandoff.key(account)
+                    db.vehicles().ownedBy(account.id).firstOrNull()?.let { settings.setSelectedVin(it.vin) }
+                }
             }.await()
             null
         } catch (error: CancellationException) {
@@ -140,15 +164,39 @@ class WatchModel(
         }
     }
 
-    /** Accounts from the phone: new ones are signed in here, known ones get the phone's credentials. */
-    suspend fun receive(accounts: List<HandoffAccount>): Int {
-        val failures = AccountHandoff.signInNew(accounts, db, controllers)
+    /**
+     * Accounts from the phone: new ones are signed in here, known ones get
+     * the phone's credentials. One signed out on the watch stays out, and
+     * one that failed isn't tried again until its credentials change: the
+     * phone sends on every change and the watch reads it at every start,
+     * and each try is a real sign-in, which a service may lock an account
+     * over. Returns how many failed.
+     */
+    suspend fun receive(accounts: List<HandoffAccount>): Int = accountLock.withLock {
+        val signedOut = settings.signedOutLogins
+        val failed = settings.failedHandoffs
+        val wanted = accounts.filter { AccountHandoff.key(it) !in signedOut && attempt(it) !in failed }
+        val failures = AccountHandoff.signInNew(wanted, db, controllers)
+        // Forget failures whose credentials the phone no longer sends.
+        settings.failedHandoffs = failed.filterTo(mutableSetOf()) { entry -> accounts.any { attempt(it) == entry } } +
+            failures.map { attempt(it.first) }
         if (settings.selectedVin.value == null) db.vehicles().all().firstOrNull()?.let { settings.setSelectedVin(it.vin) }
-        return failures.size
+        failures.size
     }
 
+    /** Signs out here; the phone's handoff won't add it back (signing in on the watch again does). */
     fun signOut(account: BBAccount) {
-        scope.launch { AccountSetup.forget(db, controllers, account) }
+        scope.launch {
+            accountLock.withLock {
+                settings.signedOutLogins += AccountHandoff.key(account)
+                AccountSetup.forget(db, controllers, account)
+            }
+        }
+    }
+
+    private fun attempt(handoff: HandoffAccount): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest("${handoff.password}\u0000${handoff.pin}".toByteArray())
+        return AccountHandoff.key(handoff) + "#" + digest.joinToString("") { "%02x".format(it) }
     }
 
     fun setColor(vin: String, change: (BBVehicle) -> Unit) {

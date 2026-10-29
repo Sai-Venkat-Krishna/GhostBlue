@@ -46,6 +46,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -326,12 +327,15 @@ class GarageModel(
         condition: (VehicleStatus) -> Boolean,
     ) {
         val key = vin to kind
-        commandJobs.remove(key)?.let { running ->
-            if (running.isActive) {
-                running.cancel()
+        val previous = commandJobs.remove(key)
+        if (previous != null && previous.isActive) {
+            val waiting = _commands.value[key]?.running == true
+            previous.cancel()
+            if (waiting) {
                 _commands.update { it - key }
                 return
             }
+            // It had failed and was only showing why: this tap sends it again.
         }
         val job = scope.launch {
             fun set(state: CommandState?) = _commands.update { if (state == null) it - key else it + (key to state) }
@@ -360,7 +364,8 @@ class GarageModel(
                 delay(ERROR_DISPLAY_MILLIS)
                 set(null)
             } finally {
-                commandJobs.remove(key)
+                // Only this command's entry: a newer one may have taken its place.
+                commandJobs.remove(key, coroutineContext.job)
             }
         }
         commandJobs[key] = job

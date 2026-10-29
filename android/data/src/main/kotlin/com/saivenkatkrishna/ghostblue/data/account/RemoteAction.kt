@@ -22,6 +22,13 @@ enum class RemoteAction(val title: String, val progress: String, val done: Strin
         STOP_CHARGE -> status.evStatus?.charging == false
     }
 
+    /** The control it belongs to: commands for different controls of a car run side by side. */
+    val control: String get() = when (this) {
+        LOCK, UNLOCK -> "lock"
+        START_CLIMATE, STOP_CLIMATE -> "climate"
+        START_CHARGE, STOP_CHARGE -> "charge"
+    }
+
     /** Unlocking from a locked phone needs the owner to unlock it first. */
     val needsDeviceUnlock: Boolean get() = this == UNLOCK
 

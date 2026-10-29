@@ -11,6 +11,7 @@ import androidx.wear.watchface.complications.data.ComplicationType
 import androidx.wear.watchface.complications.data.LongTextComplicationData
 import androidx.wear.watchface.complications.data.RangedValueComplicationData
 import androidx.wear.watchface.complications.data.ShortTextComplicationData
+import com.saivenkatkrishna.ghostblue.data.account.HandoffAccount
 import com.saivenkatkrishna.ghostblue.data.account.RemoteAction
 import com.saivenkatkrishna.ghostblue.data.db.GhostBlueDatabase
 import com.saivenkatkrishna.ghostblue.data.model.BBVehicle
@@ -24,6 +25,8 @@ import com.saivenkatkrishna.ghostblue.wear.tile.VehicleTileService
 import com.saivenkatkrishna.ghostblue.wear.tile.tileContent
 import com.saivenkatkrishna.ghostblue.wear.ui.WearApp
 import java.util.UUID
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -88,6 +91,54 @@ class WearTest {
         // The tile reads the commands straight after sending, to draw the progress.
         graph.model.send(vin, WatchControl.LOCK, RemoteAction.UNLOCK)
         assertEquals(true, graph.model.commands.value[vin to WatchControl.LOCK]?.running)
+    }
+
+    @Test fun aTapAfterACommandFinishedSendsTheNextOne() {
+        signIn()
+        val vin = runBlocking { graph.db.vehicles().all().first() }.vin
+        val key = vin to WatchControl.LOCK
+        graph.model.send(vin, WatchControl.LOCK, RemoteAction.UNLOCK)
+        compose.waitUntil(10_000) { graph.model.commands.value[key]?.running == false }
+        // Within the three seconds the result shows, Lock is sent rather than swallowed.
+        graph.model.send(vin, WatchControl.LOCK, RemoteAction.LOCK)
+        assertEquals(WatchCommand(RemoteAction.LOCK, running = true, text = "Locking…"), graph.model.commands.value[key])
+        // And a tap while it waits stops it.
+        graph.model.send(vin, WatchControl.LOCK, RemoteAction.LOCK)
+        assertNull(graph.model.commands.value[key])
+    }
+
+    private val testHandoff = HandoffAccount("testaccount@betterblue.com", "betterblue", "", Brand.FAKE.rawValue, Region.USA.rawValue)
+
+    @Test fun anAccountSignedOutOnTheWatchStaysOut() = runBlocking {
+        assertEquals(0, graph.model.receive(listOf(testHandoff)))
+        val account = graph.db.accounts().all().single()
+        graph.model.signOut(account)
+        compose.waitUntil(10_000) { runBlocking { graph.db.accounts().all().isEmpty() } }
+        graph.model.receive(listOf(testHandoff))
+        assertTrue(graph.db.accounts().all().isEmpty())
+        // Signing in on the watch again lets the phone keep it current.
+        signIn()
+        assertTrue(graph.settings.signedOutLogins.isEmpty())
+    }
+
+    @Test fun aFailedAccountIsntTriedAgainUntilItsCredentialsChange() = runBlocking {
+        // Kia isn't supported yet, so its sign-in fails.
+        val kia = HandoffAccount("driver@example.com", "pw", "1234", Brand.KIA.rawValue, Region.USA.rawValue)
+        assertEquals(1, graph.model.receive(listOf(kia)))
+        assertEquals(0, graph.model.receive(listOf(kia)))
+        assertEquals(1, graph.model.receive(listOf(kia.copy(password = "new"))))
+        assertTrue(graph.db.accounts().all().isEmpty())
+    }
+
+    @Test fun twoHandoffsAtOnceAddOneAccount() = runBlocking {
+        listOf(async { graph.model.receive(listOf(testHandoff)) }, async { graph.model.receive(listOf(testHandoff)) }).awaitAll()
+        assertEquals(1, graph.db.accounts().all().size)
+    }
+
+    @Test fun aTileButtonNamesItsCar() {
+        val id = VehicleTileService.clickId(RemoteAction.UNLOCK.name, "FAKE-Hyundai IONIQ 5-200")
+        assertEquals(RemoteAction.UNLOCK.name to "FAKE-Hyundai IONIQ 5-200", VehicleTileService.parseClick(id))
+        assertNull(VehicleTileService.parseClick(""))
     }
 
     @Test fun settingsSwitchToKilometres() {

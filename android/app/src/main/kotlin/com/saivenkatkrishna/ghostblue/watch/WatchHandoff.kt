@@ -29,7 +29,8 @@ object WatchHandoff {
     fun start(context: Context, db: GhostBlueDatabase, scope: CoroutineScope) {
         scope.launch {
             db.accounts().observeAll()
-                .map { accounts -> accounts.map(AccountHandoff::from) }
+                // Only accounts that have signed in: one being added, or with a mistyped password, isn't tried on the watch too.
+                .map { accounts -> accounts.filter { it.serializedAuthToken != null }.map(AccountHandoff::from) }
                 .distinctUntilChanged()
                 .collect { send(context, it) }
         }

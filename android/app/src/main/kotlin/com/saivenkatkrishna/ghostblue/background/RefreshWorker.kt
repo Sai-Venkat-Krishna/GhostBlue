@@ -6,6 +6,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
@@ -18,6 +19,7 @@ import com.saivenkatkrishna.ghostblue.settings.WidgetRefreshInterval
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.flow.first
 
 /**
  * Keeps the cars' status current while the app is closed, for widgets,
@@ -49,7 +51,8 @@ class RefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorke
             }
         }
         graph.refreshWidgets()
-        schedule(applicationContext)
+        // Last: replacing the unique work ends this run too.
+        schedule(applicationContext, fromWorker = true)
         return Result.success()
     }
 
@@ -64,11 +67,19 @@ class RefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorke
             return VehicleRefreshPolicy.interval(interval.seconds, pluggedIn)
         }
 
-        /** Replaces the pending refresh with one after the current interval. */
-        suspend fun schedule(context: Context) {
+        /**
+         * Replaces the pending refresh with one after the current interval.
+         * A refresh that's running is left to finish: it schedules the next
+         * one itself ([fromWorker]), and replacing it would cancel its reads.
+         */
+        suspend fun schedule(context: Context, fromWorker: Boolean = false) {
             val graph = (context.applicationContext as GhostBlueApplication).graph
+            val workManager = WorkManager.getInstance(context)
             if (graph.db.accounts().all().isEmpty()) {
-                WorkManager.getInstance(context).cancelUniqueWork(UNIQUE_NAME)
+                workManager.cancelUniqueWork(UNIQUE_NAME)
+                return
+            }
+            if (!fromWorker && workManager.getWorkInfosForUniqueWorkFlow(UNIQUE_NAME).first().any { it.state == WorkInfo.State.RUNNING }) {
                 return
             }
             var delay = nextDelaySeconds(graph.db.vehicles().all(), graph.settings.widgetRefreshInterval.value)
@@ -87,6 +98,43 @@ class RefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorke
                 .setInputData(workDataOf(KEY_FORCED to forced))
                 .build()
             WorkManager.getInstance(context).enqueueUniqueWork(UNIQUE_NAME, ExistingWorkPolicy.REPLACE, request)
+        }
+    }
+}
+
+/**
+ * A widget's refresh button: a read from the car itself (not the cached
+ * status), then every widget redraws. A worker rather than the button's
+ * broadcast, which Android stops after about a minute, as a slow modem or a
+ * fresh login can take.
+ */
+class LiveRefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    private val graph get() = (applicationContext as GhostBlueApplication).graph
+
+    override suspend fun doWork(): Result {
+        val vin = inputData.getString(KEY_VIN) ?: return Result.failure()
+        val controller = graph.db.vehicles().byVin(vin)?.ownerAccountId?.let(graph.controllers::controller)
+        try {
+            controller?.fetchAndUpdateVehicleStatus(vin, cached = false)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            BBLogger.warning(BBLogCategory.APP, "Widget refresh failed for $vin: $error")
+        }
+        graph.refreshWidgets()
+        return Result.success()
+    }
+
+    companion object {
+        private const val KEY_VIN = "vin"
+
+        /** A second tap while one is under way waits for it. */
+        fun enqueue(context: Context, vin: String) {
+            val request = OneTimeWorkRequestBuilder<LiveRefreshWorker>()
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .setInputData(workDataOf(KEY_VIN to vin))
+                .build()
+            WorkManager.getInstance(context).enqueueUniqueWork("live-refresh-$vin", ExistingWorkPolicy.KEEP, request)
         }
     }
 }

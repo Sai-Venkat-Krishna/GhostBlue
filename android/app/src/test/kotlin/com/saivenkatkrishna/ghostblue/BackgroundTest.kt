@@ -7,6 +7,7 @@ import androidx.compose.ui.unit.dp
 import androidx.glance.appwidget.testing.unit.runGlanceAppWidgetUnitTest
 import androidx.glance.testing.unit.hasContentDescriptionEqualTo
 import androidx.glance.testing.unit.hasText
+import androidx.glance.testing.unit.hasTextEqualTo
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.ListenableWorker
 import androidx.work.testing.TestListenableWorkerBuilder
@@ -30,7 +31,13 @@ import com.saivenkatkrishna.ghostblue.kit.model.VehicleStatus
 import com.saivenkatkrishna.ghostblue.notifications.chargingProgressText
 import com.saivenkatkrishna.ghostblue.settings.AppSettings
 import com.saivenkatkrishna.ghostblue.settings.WidgetRefreshInterval
+import com.saivenkatkrishna.ghostblue.ui.components.Format
 import com.saivenkatkrishna.ghostblue.widgets.CommandCenter
+import com.saivenkatkrishna.ghostblue.widgets.WidgetAccent
+import com.saivenkatkrishna.ghostblue.widgets.WovenArt
+import com.saivenkatkrishna.ghostblue.widgets.WovenContent
+import com.saivenkatkrishna.ghostblue.widgets.rangeParts
+import com.saivenkatkrishna.ghostblue.widgets.timeLeft
 import com.saivenkatkrishna.ghostblue.widgets.WidgetState
 import com.saivenkatkrishna.ghostblue.widgets.WidgetVehicle
 import com.saivenkatkrishna.ghostblue.widgets.WidgetVehicles
@@ -44,6 +51,7 @@ import java.util.UUID
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -85,16 +93,38 @@ class BackgroundTest {
         signedIn()
         val vin = firstVehicle().vin
         val worker = TestListenableWorkerBuilder<CommandWorker>(context)
-            .setInputData(workDataOf(CommandWorker.KEY_VIN to vin, CommandWorker.KEY_ACTION to RemoteAction.UNLOCK.name))
+            .setInputData(command(vin, RemoteAction.UNLOCK))
             .build()
         assertTrue(worker.doWork() is ListenableWorker.Result.Success)
         assertEquals(VehicleStatus.LockStatus.UNLOCKED, graph.db.vehicles().byVin(vin)!!.lockStatus)
         assertTrue(graph.db.remoteCommands().all().any { it.commandName == "Unlock" })
     }
 
+    private fun command(vin: String, action: RemoteAction, enqueuedAt: Long = System.currentTimeMillis()) = workDataOf(
+        CommandWorker.KEY_VIN to vin,
+        CommandWorker.KEY_ACTION to action.name,
+        CommandWorker.KEY_ENQUEUED_AT to enqueuedAt,
+    )
+
+    @Test fun aCommandThatWaitedTooLongIsNotSent() = runTest {
+        signedIn()
+        val vin = firstVehicle().vin
+        val worker = TestListenableWorkerBuilder<CommandWorker>(context)
+            .setInputData(command(vin, RemoteAction.UNLOCK, enqueuedAt = System.currentTimeMillis() - 10 * 60_000))
+            .build()
+        assertTrue(worker.doWork() is ListenableWorker.Result.Failure)
+        assertEquals(VehicleStatus.LockStatus.LOCKED, graph.db.vehicles().byVin(vin)!!.lockStatus)
+        assertTrue(graph.db.remoteCommands().all().none { it.commandName == "Unlock" })
+    }
+
+    @Test fun lockAndClimateFromWidgetsDontReplaceEachOther() {
+        assertNotEquals(CommandWorker.uniqueName("VIN", RemoteAction.LOCK), CommandWorker.uniqueName("VIN", RemoteAction.START_CLIMATE))
+        assertEquals(CommandWorker.uniqueName("VIN", RemoteAction.LOCK), CommandWorker.uniqueName("VIN", RemoteAction.UNLOCK))
+    }
+
     @Test fun aCommandForAnUnknownCarFails() = runTest {
         val worker = TestListenableWorkerBuilder<CommandWorker>(context)
-            .setInputData(workDataOf(CommandWorker.KEY_VIN to "NOPE", CommandWorker.KEY_ACTION to RemoteAction.LOCK.name))
+            .setInputData(command("NOPE", RemoteAction.LOCK))
             .build()
         assertTrue(worker.doWork() is ListenableWorker.Result.Failure)
     }
@@ -125,7 +155,12 @@ class BackgroundTest {
         val vin = firstVehicle().vin
         graph.garage.editVehicle(vin) { it.smartChargingEnabled = true }
         Thread.sleep(200)
+        // 11 AM Pacific: the 10 AM boundary hasn't had its run yet, so it runs now.
+        assertEquals(now, SmartChargingScheduler.nextRun(graph.db, now))
         val boundary = SDGESmartChargingSchedule.transitions(now, count = 1).first().date
+        assertEquals(boundary.plusSeconds(60), SmartChargingScheduler.nextRun(graph.db, now, afterRun = true))
+        graph.garage.editVehicle(vin) { it.smartChargingLastRunAt = now }
+        Thread.sleep(200)
         assertEquals(boundary.plusSeconds(60), SmartChargingScheduler.nextRun(graph.db, now))
 
         SmartChargingScheduler.schedule(context)
@@ -161,10 +196,13 @@ class BackgroundTest {
         val due = ReminderScheduler.due(graph.db, now, zone)
         assertEquals(1, due.size)
         assertTrue(due.single() is DueReminder.Precondition)
+        // Due and not yet posted: the alarm is now, not tomorrow, whatever reschedules it.
+        assertEquals(now, ReminderScheduler.nextAlarm(graph.db, now, zone))
         automation.lastTriggeredAt = now
         graph.db.automations().update(automation)
         assertTrue(ReminderScheduler.due(graph.db, now, zone).isEmpty())
         assertEquals(Instant.parse("2026-10-29T17:45:00Z"), ReminderScheduler.upcoming(graph.db, now, zone).first().at)
+        assertEquals(Instant.parse("2026-10-29T17:45:00Z"), ReminderScheduler.nextAlarm(graph.db, now, zone))
     }
 
     @Test fun datedMaintenanceIsDueAtNineOnItsDay() = runTest {
@@ -233,6 +271,63 @@ class BackgroundTest {
         assertEquals("A", WidgetVehicles.resolve(listOf(a, b), pinned = "gone", selected = "A")?.vin)
         assertEquals("A", WidgetVehicles.resolve(listOf(hidden, a), pinned = "H", selected = null)?.vin)
         assertEquals(dialColor(15, charging = false), dialColor(20, charging = false))
+    }
+
+    private fun chargingIoniq() = BBVehicle().apply {
+        vin = "VIN1"
+        model = "2025 IONIQ 5"
+        lockStatus = VehicleStatus.LockStatus.LOCKED
+        lastUpdated = now
+        odometer = Distance(9789.0, Distance.Units.MILES)
+        evStatus = VehicleStatus.EVStatus(
+            charging = true,
+            chargeSpeed = 6.9,
+            evRange = VehicleStatus.FuelRange(Distance(253.0, Distance.Units.MILES), 87.0),
+            plugType = VehicleStatus.PlugType.AC_CHARGER,
+            chargeTimeSeconds = 4320,
+            targetSocAC = 90.0,
+        )
+    }
+
+    @Test fun theWovenWidgetShowsChargingAndBothLockButtons() = runGlanceAppWidgetUnitTest {
+        setContext(context)
+        setAppWidgetSize(DpSize(340.dp, 380.dp))
+        provideComposable { WovenContent(WidgetState(WidgetVehicle.from(chargingIoniq(), Distance.Units.MILES, now), image = null, rivian = false)) }
+        onNode(hasText("253")).assertExists()
+        onNode(hasText("RANGE")).assertExists()
+        onNode(hasText("87%")).assertExists()
+        onNode(hasText("Charging · AC · 6.9 kW")).assertExists()
+        onNode(hasText("1h 12m left")).assertExists()
+        onNode(hasText("Target 90%")).assertExists()
+        // Both, as on iOS, whatever the car reports.
+        onNode(hasTextEqualTo("Lock")).assertExists()
+        onNode(hasTextEqualTo("Unlock")).assertExists()
+    }
+
+    @Test fun theWovenWidgetsRivianVersionFillsTheGoldButtonThatChangesTheState() = runGlanceAppWidgetUnitTest {
+        setContext(context)
+        setAppWidgetSize(DpSize(340.dp, 380.dp))
+        // Plugged in, so the charging row shows too: the pills must still fit Glance's ten children a column.
+        val pluggedIn = chargingIoniq().apply { evStatus = evStatus!!.copy(charging = false) }
+        provideComposable { WovenContent(WidgetState(WidgetVehicle.from(pluggedIn, Distance.Units.MILES, now), image = null, rivian = true)) }
+        onNode(hasText("Plugged in · ${Format.time(now)}")).assertExists()
+        onNode(hasText("Target 90%")).assertExists()
+        onNode(hasText("87")).assertExists()
+        onNode(hasTextEqualTo("Lock")).assertExists()
+        onNode(hasTextEqualTo("Unlock")).assertExists()
+    }
+
+    @Test fun theWovenLetteringAndCaptionsReadAsOnIOS() {
+        val vehicle = WidgetVehicle.from(chargingIoniq(), Distance.Units.MILES, now)
+        assertEquals("IONIQ 5", WovenArt.wordmark(vehicle))
+        assertEquals("IONIQ" to "5", WovenArt.parts("IONIQ 5"))
+        assertEquals("KONA" to "", WovenArt.parts("KONA"))
+        assertEquals("253" to "mi", rangeParts("253 mi"))
+        assertEquals("--" to "", rangeParts("--"))
+        assertEquals("1h 12m left", timeLeft(4320))
+        assertEquals("12m left", timeLeft(720))
+        assertEquals("12 min left", timeLeft(720, shortMinutes = false))
+        assertNull(timeLeft(30))
     }
 
     @Test fun theCommandCenterWidgetShowsTheCarAndItsButtons() = runGlanceAppWidgetUnitTest {

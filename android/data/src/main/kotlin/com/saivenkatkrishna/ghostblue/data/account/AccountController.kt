@@ -13,6 +13,7 @@ import com.saivenkatkrishna.ghostblue.data.model.CommandActivityState
 import com.saivenkatkrishna.ghostblue.data.model.DeviceType
 import com.saivenkatkrishna.ghostblue.data.model.RemoteCommandActivity
 import com.saivenkatkrishna.ghostblue.data.vehicle.StatusWaitingManager
+import com.saivenkatkrishna.ghostblue.data.vehicle.VehicleStatusEvents
 import com.saivenkatkrishna.ghostblue.data.vehicle.archiveTrips
 import com.saivenkatkrishna.ghostblue.data.vehicle.isAtConfiguredHome
 import com.saivenkatkrishna.ghostblue.data.vehicle.isSmartChargingControllableAC
@@ -330,6 +331,7 @@ class AccountController(
         currentCoroutineContext().ensureActive()
         return try {
             db.withTransaction { (db.vehicles().byVin(vin) ?: vehicle(vin)).updateStatus(status, db) }
+                .also { VehicleStatusEvents.post(vin) }
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {

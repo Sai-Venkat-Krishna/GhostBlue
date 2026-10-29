@@ -91,13 +91,15 @@ class VehicleTileService : TileService() {
         val graph = applicationContext.wearGraph
         val vehicles = graph.db.vehicles().all().filter { !it.isHidden }
         val vehicle = vehicles.firstOrNull { it.vin == graph.settings.selectedVin.value } ?: vehicles.firstOrNull()
-        // A button press: send it now; the tile updates as the car confirms.
-        if (vehicle != null) {
-            when (val clicked = request.currentState.lastClickableId) {
-                ID_REFRESH -> graph.model.refresh(vehicle.vin, forced = true)
-                else -> RemoteAction.fromName(clicked)?.let { action ->
-                    val control = if (action == RemoteAction.LOCK || action == RemoteAction.UNLOCK) WatchControl.LOCK else WatchControl.CLIMATE
-                    if (graph.model.commands.value[vehicle.vin to control]?.running != true) graph.model.send(vehicle.vin, control, action)
+        // A button press, for the car the tile showed when it was pressed (another may be in front since): send it now;
+        // the tile updates as the car confirms.
+        val (name, clickedVin) = parseClick(request.currentState.lastClickableId) ?: ("" to "")
+        if (vehicles.any { it.vin == clickedVin }) {
+            when (name) {
+                ID_REFRESH -> graph.model.refresh(clickedVin, forced = true)
+                else -> RemoteAction.fromName(name)?.let { action ->
+                    val control = WatchControl.of(action)
+                    if (graph.model.commands.value[clickedVin to control]?.running != true) graph.model.send(clickedVin, control, action)
                 }
             }
         }
@@ -116,6 +118,17 @@ class VehicleTileService : TileService() {
     companion object {
         const val RESOURCES_VERSION = "1"
         const val ID_REFRESH = "refresh"
+        private const val CLICK_SEPARATOR = '|'
+
+        /** A button's click ID: what it does, and for which car. */
+        fun clickId(name: String, vin: String?) = "$name$CLICK_SEPARATOR${vin.orEmpty()}"
+
+        /** A click ID's action and car, or null when there's none (a plain redraw). */
+        fun parseClick(id: String): Pair<String, String>? {
+            val vin = id.substringAfter(CLICK_SEPARATOR, "")
+            return if (vin.isEmpty()) null else id.substringBefore(CLICK_SEPARATOR) to vin
+        }
+
         private const val ICON_LOCK = "lock"
         private const val ICON_UNLOCK = "unlock"
         private const val ICON_CLIMATE = "climate"
@@ -151,14 +164,14 @@ class VehicleTileService : TileService() {
             if (content.lockAction != null && content.climateAction != null) {
                 val buttons = MultiButtonLayout.Builder()
                     .addButtonContent(
-                        Button.Builder(context, load(content.lockAction.name))
+                        Button.Builder(context, load(clickId(content.lockAction.name, content.vin)))
                             .setIconContent(if (content.lockAction == RemoteAction.UNLOCK) ICON_UNLOCK else ICON_LOCK)
                             .setContentDescription(content.lockAction.title)
                             .setButtonColors(ButtonColors.secondaryButtonColors(colors))
                             .build(),
                     )
                     .addButtonContent(
-                        Button.Builder(context, load(content.climateAction.name))
+                        Button.Builder(context, load(clickId(content.climateAction.name, content.vin)))
                             .setIconContent(ICON_CLIMATE)
                             .setContentDescription(content.climateAction.title)
                             .setButtonColors(
@@ -177,7 +190,7 @@ class VehicleTileService : TileService() {
                 )
                 .setContent(body.build())
                 .setPrimaryChipContent(
-                    CompactChip.Builder(context, "Refresh", load(ID_REFRESH), device)
+                    CompactChip.Builder(context, "Refresh", load(clickId(ID_REFRESH, content.vin)), device)
                         .setChipColors(ChipColors.secondaryChipColors(colors))
                         .build(),
                 )

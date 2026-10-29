@@ -43,7 +43,9 @@ import com.saivenkatkrishna.ghostblue.kit.model.Distance
 import com.saivenkatkrishna.ghostblue.kit.model.Region
 import com.saivenkatkrishna.ghostblue.kit.model.isTestAccount
 import com.saivenkatkrishna.ghostblue.wear.WearGraph
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** The watch's keyboard (or voice) for one field, through Wear's remote input. */
 @Composable
@@ -84,7 +86,8 @@ fun SignInScreen(graph: WearGraph, onDone: () -> Unit) {
         error = null
         scope.launch {
             val failure = graph.model.signIn(user, pass, code, if (isTestAccount(user, pass)) Brand.FAKE else Brand.HYUNDAI, Region.USA)
-            if (failure == null) onDone() else error = failure
+            // Navigation needs the main thread, whichever thread the sign-in finished on.
+            withContext(Dispatchers.Main.immediate) { if (failure == null) onDone() else error = failure }
         }
     }
 

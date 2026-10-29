@@ -29,13 +29,14 @@ object AccountSetup {
         pin: String,
         brand: Brand,
         region: Region,
-        testCars: List<FakeVehicleRecord> = emptyList(),
+        /** The test account's cars; null for the default three. An empty list adds none. */
+        testCars: List<FakeVehicleRecord>? = null,
     ): BBAccount {
         val account = BBAccount(username.trim(), password, pin, effectiveBrand(username, password, brand), region)
         db.accounts().insert(account)
         try {
             if (account.brandEnum == Brand.FAKE) {
-                addTestCars(db, account.id, testCars.ifEmpty { FakeVehicleSeeds.defaultRecords(account.id) })
+                addTestCars(db, account.id, testCars ?: FakeVehicleSeeds.defaultRecords(account.id))
             }
             val controller = controllers.controller(account.id)
             controller.initialize()

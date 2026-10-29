@@ -98,6 +98,7 @@ class Notifier(private val context: Context, private val settings: AppSettings) 
         const val ALERT_ID = 1
         const val COMMAND_ID = 2
         const val CHARGING_ID = 3
+        const val SMART_CHARGING_RUN_ID = 4
 
         /** Opens GhostBlue on [vin]'s Home. */
         fun openApp(context: Context, vin: String?): PendingIntent {

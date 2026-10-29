@@ -79,25 +79,33 @@ phases, all of them in this folder.
     HTTP logs and about.
   - Layouts use two columns from 600 dp wide, as iOS's `AdaptiveLayout`.
   - `widgets/`: Glance widgets for iOS's Command Center (small, medium and
-    large, with lock and climate buttons and a refresh) and Charge Dial,
-    each optionally pinned to a car; Quick Settings tiles for lock, climate
-    and charging that show the selected car's state (unlocking from a locked
-    phone asks for the phone to be unlocked).
+    large, with lock and climate buttons and a refresh), Charge Dial and
+    Woven Wordmark (the large card where the charge fills the model
+    lettering, with charging progress and Lock and Unlock, in a mint, violet,
+    amber or coral accent, or iOS's Rivian version under the Rivian theme),
+    each optionally pinned to a car. A widget on screen follows the car's
+    every status, which car is selected, the units and the theme. Quick
+    Settings tiles for lock, climate and charging show the selected car's
+    state (unlocking from a locked phone asks for the phone to be unlocked).
   - `background/`: WorkManager and alarms, since Android has no widget
     timelines or Shortcuts. `RefreshWorker` refreshes the cars every widget
     refresh interval (ten minutes while plugged in, five while a charging
     notification is up); `CommandWorker` runs widget and tile commands and
-    shows their progress; `SmartChargingScheduler` runs smart charging just
-    after each SDG&E boundary (exact when the owner allows exact alarms),
-    which iOS leaves to Shortcuts automations; `ReminderScheduler` posts
-    precondition reminders daily and dated maintenance at 9 AM on its day.
-    Alarms are set again after a reboot, an update or a clock change.
+    shows their progress, one per control of a car (Unlock replaces a
+    waiting Lock, but not a climate command), and drops one that waited more
+    than two minutes to start; `SmartChargingScheduler` runs smart charging
+    just after each SDG&E boundary (exact when the owner allows exact
+    alarms), which iOS leaves to Shortcuts automations; `ReminderScheduler`
+    posts precondition reminders daily and dated maintenance at 9 AM on its
+    day. A boundary or reminder whose alarm was moved or held back still
+    runs, late. Alarms are set again after a reboot, an update or a clock
+    change.
   - `notifications/`: the data layer's alerts as notifications, on their own
     channels, with iOS's switch and quiet hours; a charging notification
     kept current while a car charges (iOS's Live Activity, behind the same
     beta switch).
-  - `watch/`: sends the phone's accounts to the watch over the Wearable Data
-    Layer whenever they change.
+  - `watch/`: sends the phone's accounts that have signed in to the watch
+    over the Wearable Data Layer whenever they change.
 
   Where Android differs from iOS: smart charging posts what it changed
   (iOS shows it only in Shortcuts); widget and tile commands wait for the
@@ -127,14 +135,19 @@ phases, all of them in this folder.
     opens that car.
   - `handoff/`: receives the phone's accounts, even with the watch app closed,
     and signs in the new ones. Known accounts take the phone's password and
-    PIN; nothing on the watch is deleted because the phone dropped it.
+    PIN; nothing on the watch is deleted because the phone dropped it. An
+    account signed out on the watch stays out until it's signed in there
+    again, and one that fails isn't tried again until its password or PIN
+    changes, since every try is a real sign-in.
 
   Where the watch differs from iOS: iOS's watch reads the iPhone's accounts
   and gets its units, look and car colours over WatchConnectivity. Android's
   watch can also sign in by itself, and keeps its own units, look and colours.
-  The Data Layer carries the accounts' passwords, PINs and refresh tokens; it's encrypted
+  The Data Layer carries the accounts' passwords and PINs; it's encrypted
   between paired devices and only reaches an app with the same package name
-  and signing key, and the watch stores them as the phone does.
+  and signing key, and the watch stores them as the phone does. Neither app's
+  data goes into Android's backups or device-to-device transfers; GhostBlue's
+  own backup file is the way to move to another phone.
 
 Not ported yet: Kia USA, Hyundai Canada and Europe, and MFA. The factory
 reports these as not yet supported; unlike iOS, which falls back to the test

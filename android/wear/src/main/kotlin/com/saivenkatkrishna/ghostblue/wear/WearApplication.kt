@@ -9,6 +9,7 @@ import androidx.core.content.edit
 import androidx.wear.tiles.TileService
 import androidx.wear.watchface.complications.datasource.ComplicationDataSourceUpdateRequester
 import com.saivenkatkrishna.ghostblue.data.account.AccountControllers
+import com.saivenkatkrishna.ghostblue.data.account.AccountHandoff
 import com.saivenkatkrishna.ghostblue.data.account.HTTPLogSinkManager
 import com.saivenkatkrishna.ghostblue.data.db.GhostBlueDatabase
 import com.saivenkatkrishna.ghostblue.data.model.DeviceType
@@ -28,8 +29,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /** The watch's preferences: the distance unit and look, as iOS's watch settings, and the car shown first. */
@@ -66,11 +70,23 @@ class WearSettings(private val prefs: SharedPreferences) {
         prefs.edit { putString(SELECTED_VIN, value) }
     }
 
+    /** Logins signed out on the watch ([AccountHandoff.key]): the phone's handoff leaves them out. */
+    var signedOutLogins: Set<String>
+        get() = prefs.getStringSet(SIGNED_OUT, null).orEmpty().toSet()
+        set(value) = prefs.edit { putStringSet(SIGNED_OUT, value) }
+
+    /** Logins from the phone that failed to sign in, with a digest of the credentials tried: not tried again until they change. */
+    var failedHandoffs: Set<String>
+        get() = prefs.getStringSet(FAILED_HANDOFFS, null).orEmpty().toSet()
+        set(value) = prefs.edit { putStringSet(FAILED_HANDOFFS, value) }
+
     companion object {
         // iOS's keys, as the phone app uses.
         const val DISTANCE_UNIT = "DistanceUnit"
         const val APP_THEME = "AppTheme"
         const val SELECTED_VIN = "SelectedVehicleVIN"
+        private const val SIGNED_OUT = "SignedOutLogins"
+        private const val FAILED_HANDOFFS = "FailedHandoffs"
     }
 }
 
@@ -100,11 +116,19 @@ class WearGraph(
         }
     }
 
-    /** The tile and complications follow every status the watch applies, and the tile each command's progress. */
+    /**
+     * The tile and complications follow every status the watch applies, each
+     * command's progress, and which car they show: the one in front, the
+     * units, and the cars there are.
+     */
     @OptIn(FlowPreview::class)
     fun start() {
         scope.launch { VehicleStatusEvents.statusUpdated.debounce(500).collect { refreshSurfaces() } }
         scope.launch { model.commands.drop(1).debounce(500).collect { refreshSurfaces() } }
+        scope.launch {
+            combine(settings.selectedVin, settings.distanceUnit, model.vehicles.map { list -> list?.map { it.vin to it.displayName } }) { a, b, c -> Triple(a, b, c) }
+                .distinctUntilChanged().drop(1).debounce(500).collect { refreshSurfaces() }
+        }
         scope.launch { AccountListenerService.syncFromPhone(context) }
     }
 

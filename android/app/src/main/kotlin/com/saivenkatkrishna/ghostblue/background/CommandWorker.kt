@@ -20,6 +20,9 @@ import com.saivenkatkrishna.ghostblue.notifications.Channel
 import com.saivenkatkrishna.ghostblue.notifications.Notifier
 import com.saivenkatkrishna.ghostblue.ui.commandErrorMessage
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 
 /**
  * A command from a widget, tile or notification. It runs as expedited work
@@ -37,10 +40,18 @@ class CommandWorker(context: Context, params: WorkerParameters) : CoroutineWorke
         val controller = vehicle.ownerAccountId?.let(graph.controllers::controller) ?: return Result.failure()
         val name = vehicle.displayName
         val notifier = graph.notifier
-        val tag = "$vin:command"
+        val tag = "$vin:command:${action.control}"
 
         fun show(text: String, ongoing: Boolean) {
             notifier.notify(tag, progressNotification(name, action, text, ongoing), Notifier.COMMAND_ID)
+        }
+
+        // Work out of expedited quota, or re-run after the process died, can start much later:
+        // the car may have changed since, so an old tap isn't sent.
+        val enqueuedAt = inputData.getLong(KEY_ENQUEUED_AT, 0)
+        if (System.currentTimeMillis() - enqueuedAt > EXPIRY_MILLIS) {
+            show("Not sent: it waited too long. Tap again to send it.", ongoing = false)
+            return Result.failure()
         }
 
         return try {
@@ -50,6 +61,13 @@ class CommandWorker(context: Context, params: WorkerParameters) : CoroutineWorke
             graph.refreshWidgets()
             Result.success()
         } catch (error: CancellationException) {
+            withContext(NonCancellable) {
+                // Stopped: leave no spinner behind, unless a newer command for this control took over the notification.
+                val replaced = WorkManager.getInstance(applicationContext)
+                    .getWorkInfosForUniqueWorkFlow(uniqueName(vin, action)).first()
+                    .any { it.id != id && !it.state.isFinished }
+                if (!replaced) notifier.cancel(tag, Notifier.COMMAND_ID)
+            }
             throw error
         } catch (error: Exception) {
             show(
@@ -95,16 +113,20 @@ class CommandWorker(context: Context, params: WorkerParameters) : CoroutineWorke
     companion object {
         const val KEY_VIN = "vin"
         const val KEY_ACTION = "action"
+        const val KEY_ENQUEUED_AT = "enqueuedAt"
         private const val RESULT_TIMEOUT_MILLIS = 15_000L
+        private const val EXPIRY_MILLIS = 2 * 60_000L
 
-        /** One command per car at a time; a new one replaces a waiting one. */
+        /** One command per control of a car at a time, as in the app: Unlock replaces a waiting Lock, but not climate. */
+        fun uniqueName(vin: String, action: RemoteAction) = "command-$vin-${action.control}"
+
         fun enqueue(context: Context, vin: String, action: RemoteAction) {
             val request = OneTimeWorkRequestBuilder<CommandWorker>()
-                .setInputData(workDataOf(KEY_VIN to vin, KEY_ACTION to action.name))
+                .setInputData(workDataOf(KEY_VIN to vin, KEY_ACTION to action.name, KEY_ENQUEUED_AT to System.currentTimeMillis()))
                 .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .addTag(TAG)
                 .build()
-            WorkManager.getInstance(context).enqueueUniqueWork("command-$vin", ExistingWorkPolicy.REPLACE, request)
+            WorkManager.getInstance(context).enqueueUniqueWork(uniqueName(vin, action), ExistingWorkPolicy.REPLACE, request)
         }
 
         const val TAG = "remote-command"

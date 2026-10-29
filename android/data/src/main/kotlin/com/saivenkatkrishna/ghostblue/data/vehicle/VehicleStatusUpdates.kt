@@ -135,7 +135,8 @@ suspend fun BBVehicle.updateStatus(status: VehicleStatus, db: GhostBlueDatabase?
     if (db != null) recordChargingActivity(status, db.chargeSessions(), previousOdometer, commandedStop)
     evaluateSmartAlerts(accepted, db)
     db?.vehicles()?.update(this)
-    VehicleStatusEvents.post(vin)
+    // Inside a transaction, listeners would read the row from before it: the caller posts after committing.
+    if (db?.inTransaction() != true) VehicleStatusEvents.post(vin)
     return accepted
 }
 

@@ -191,6 +191,11 @@ private fun VehiclePager(graph: WearGraph, vehicles: List<BBVehicle>, remoteImag
     LaunchedEffect(pagerState.currentPage, vehicles.size) {
         vehicles.getOrNull(pagerState.currentPage)?.let { graph.settings.setSelectedVin(it.vin) }
     }
+    // A tile or complication tap while the app is open brings its car to the front.
+    LaunchedEffect(selected, vehicles) {
+        val page = vehicles.indexOfFirst { it.vin == selected }
+        if (page >= 0 && page != pagerState.currentPage) pagerState.scrollToPage(page)
+    }
     HorizontalPagerScaffold(pagerState = pagerState) {
         HorizontalPager(state = pagerState) { page ->
             AnimatedPage(pageIndex = page, pagerState = pagerState) {
@@ -333,7 +338,8 @@ private fun ControlButton(
     val running = command?.running == true
     val label = if (running) "Stop" else action.title
     FilledTonalButton(
-        onClick = { onSend(command?.action ?: action) },
+        // While it waits, a tap stops that command; otherwise it sends this one.
+        onClick = { onSend(if (running) command.action else action) },
         modifier = Modifier.fillMaxWidth().testTag(tag).semantics { contentDescription = "$label, $stateText" },
         icon = { if (running) Icon(Icons.Rounded.Stop, contentDescription = null) else icon() },
         secondaryLabel = { Text(command?.text ?: stateText, maxLines = 1, overflow = TextOverflow.Ellipsis) },

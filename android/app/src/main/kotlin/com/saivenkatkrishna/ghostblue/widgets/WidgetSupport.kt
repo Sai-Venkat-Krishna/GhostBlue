@@ -7,7 +7,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.core.content.edit
 import androidx.glance.GlanceId
 import androidx.glance.action.ActionParameters
-import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.color.ColorProvider
 import androidx.glance.unit.ColorProvider
@@ -16,11 +15,12 @@ import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import coil3.request.allowHardware
 import coil3.toBitmap
-import com.saivenkatkrishna.ghostblue.GhostBlueApplication
 import com.saivenkatkrishna.ghostblue.MainActivity
 import com.saivenkatkrishna.ghostblue.background.CommandWorker
+import com.saivenkatkrishna.ghostblue.background.LiveRefreshWorker
 import com.saivenkatkrishna.ghostblue.background.RefreshWorker
 import com.saivenkatkrishna.ghostblue.data.account.RemoteAction
+import com.saivenkatkrishna.ghostblue.data.charging.chargingDisplayState
 import com.saivenkatkrishna.ghostblue.data.charging.vehicleSampleDate
 import com.saivenkatkrishna.ghostblue.data.model.BBVehicle
 import com.saivenkatkrishna.ghostblue.kit.model.Distance
@@ -29,6 +29,10 @@ import com.saivenkatkrishna.ghostblue.ui.components.Format
 import com.saivenkatkrishna.ghostblue.ui.components.VehicleImages
 import com.saivenkatkrishna.ghostblue.ui.home.chargeTarget
 import java.time.Instant
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 /**
  * Which car each widget shows. Like iOS's widget configuration, a widget
@@ -38,8 +42,15 @@ import java.time.Instant
 object WidgetVehicles {
     private const val PREFS = "widget_vehicles"
 
-    fun pin(context: Context, appWidgetId: Int, vin: String?) =
+    private val changes = MutableStateFlow(0)
+
+    /** Moves when a widget's car or accent changes, so a widget already on screen redraws with it. */
+    val configChanges: StateFlow<Int> = changes.asStateFlow()
+
+    fun pin(context: Context, appWidgetId: Int, vin: String?) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { if (vin == null) remove("$appWidgetId") else putString("$appWidgetId", vin) }
+        changes.update { it + 1 }
+    }
 
     fun pinned(context: Context, appWidgetId: Int): String? =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("$appWidgetId", null)
@@ -49,9 +60,26 @@ object WidgetVehicles {
         return visible.firstOrNull { it.vin == pinned } ?: visible.firstOrNull { it.vin == selected } ?: visible.firstOrNull()
     }
 
-    suspend fun vinFor(context: Context, glanceId: GlanceId): String? = runCatching {
-        pinned(context, GlanceAppWidgetManager(context).getAppWidgetId(glanceId))
-    }.getOrNull()
+    fun setAccent(context: Context, appWidgetId: Int, accent: WidgetAccent) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putString("accent-$appWidgetId", accent.name) }
+        changes.update { it + 1 }
+    }
+
+    fun accent(context: Context, appWidgetId: Int): WidgetAccent =
+        WidgetAccent.fromName(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("accent-$appWidgetId", null))
+
+}
+
+/** The accent a Woven Wordmark widget is drawn in, as iOS's widget configuration offers it. */
+enum class WidgetAccent(val title: String, val argb: Int) {
+    MINT("Mint", 0xFF34E5C4.toInt()),
+    VIOLET("Violet", 0xFF7A7FFF.toInt()),
+    AMBER("Amber", 0xFFFFB347.toInt()),
+    CORAL("Coral", 0xFFFF6B6B.toInt());
+
+    companion object {
+        fun fromName(name: String?): WidgetAccent = entries.firstOrNull { it.name == name } ?: MINT
+    }
 }
 
 /** What the widgets show for a car: iOS's `VehicleEntity`. */
@@ -74,6 +102,10 @@ data class WidgetVehicle(
     val finish: String?,
     val odometer: String,
     val updated: String?,
+    val updatedAt: Instant? = null,
+    /** While plugged in and not charging: "Plugged in · not charging", "Scheduled pause"... */
+    val chargingTitle: String = "",
+    val remainingSeconds: Long = 0,
 ) {
     companion object {
         fun from(vehicle: BBVehicle, unit: Distance.Units, now: Instant = Instant.now()): WidgetVehicle {
@@ -111,6 +143,9 @@ data class WidgetVehicle(
                 finish = finish?.let { Format.finishTime(it, now) },
                 odometer = Format.distance(vehicle.odometer, unit),
                 updated = vehicle.lastUpdated?.let { Format.time(it) },
+                updatedAt = vehicle.lastUpdated,
+                chargingTitle = vehicle.chargingDisplayState(now).title,
+                remainingSeconds = ev?.chargeTimeSeconds ?: 0,
             )
         }
     }
@@ -157,18 +192,10 @@ class CommandCallback : ActionCallback {
     }
 }
 
-/** A widget's refresh button: a read from the car itself, then every widget redraws. */
+/** A widget's refresh button: a read from the car itself, then every widget redraws ([LiveRefreshWorker]). */
 class RefreshCallback : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val vin = parameters[KeyVin]
-        val graph = (context.applicationContext as GhostBlueApplication).graph
-        if (vin == null) {
-            RefreshWorker.refreshNow(context)
-            return
-        }
-        graph.db.vehicles().byVin(vin)?.ownerAccountId?.let(graph.controllers::controller)?.let { controller ->
-            runCatching { controller.fetchAndUpdateVehicleStatus(vin, cached = false) }
-        }
-        graph.refreshWidgets()
+        if (vin == null) RefreshWorker.refreshNow(context) else LiveRefreshWorker.enqueue(context, vin)
     }
 }

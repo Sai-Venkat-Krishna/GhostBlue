@@ -63,7 +63,8 @@ class VehicleComplicationService : SuspendingComplicationDataSourceService() {
             ).build()
             val tap = PendingIntent.getActivity(
                 context,
-                0,
+                // One per car, so the preview (no car) or another car's complication can't replace its extra.
+                content.vin?.hashCode() ?: 0,
                 Intent(context, WearMainActivity::class.java).putExtra(WearMainActivity.EXTRA_VIN, content.vin),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )

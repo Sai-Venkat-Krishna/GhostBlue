@@ -25,12 +25,15 @@ import com.saivenkatkrishna.ghostblue.watch.WatchHandoff
 import com.saivenkatkrishna.ghostblue.widgets.ChargeDialWidget
 import com.saivenkatkrishna.ghostblue.widgets.VehicleTiles
 import com.saivenkatkrishna.ghostblue.widgets.VehicleWidget
+import com.saivenkatkrishna.ghostblue.widgets.WovenWidget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -60,6 +63,7 @@ class AppGraph(
         runCatching {
             VehicleWidget().updateAll(context)
             ChargeDialWidget().updateAll(context)
+            WovenWidget().updateAll(context)
         }.onFailure { BBLogger.warning(BBLogCategory.APP, "Widget update failed: $it") }
         VehicleTiles.requestUpdate(context)
     }
@@ -88,10 +92,22 @@ class AppGraph(
             VehicleStatusEvents.statusUpdated.debounce(500).collect { refreshWidgets() }
         }
         scope.launch {
+            // What widgets and tiles show besides a status: which car, units, theme, the cars and their names and colours.
+            combine(
+                settings.selectedVin,
+                settings.distanceUnit,
+                settings.theme,
+                db.vehicles().observeAll().map { list -> list.map { listOf(it.vin, it.isHidden, it.displayName, it.vehicleImageColor) } },
+            ) { selected, unit, theme, cars -> listOf(selected, unit, theme, cars) }
+                .distinctUntilChanged().drop(1).debounce(500).collect { refreshWidgets() }
+        }
+        scope.launch {
             // Settings and car changes that move a schedule: the owner's interval, smart charging, reminders.
             combine(
                 combine(settings.widgetRefreshInterval, settings.liveProgress, settings.notificationsEnabled) { a, b, c -> Triple(a, b, c) },
-                db.vehicles().observeAll().map { list -> list.map { Triple(it.vin, it.smartChargingEnabled, it.evStatus?.pluggedIn) } },
+                // Every status write re-emits the cars; only these fields move a schedule.
+                db.vehicles().observeAll().map { list -> list.map { Triple(it.vin, it.smartChargingEnabled, it.evStatus?.pluggedIn) } }
+                    .distinctUntilChanged(),
                 db.automations().observeAll(),
                 db.maintenanceReminders().observeAll(),
             ) { _, _, _, _ -> }.debounce(1_000).collect { rescheduleBackgroundWork() }

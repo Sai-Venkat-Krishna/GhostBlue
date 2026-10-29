@@ -76,16 +76,22 @@ object ReminderScheduler {
             Intent(context, ReminderAlarmReceiver::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val next = upcoming(graph.db).firstOrNull()
+        val next = nextAlarm(graph.db)
         if (next == null) {
             alarms.cancel(intent)
             return
         }
         if (SmartChargingScheduler.canScheduleExact(alarms)) {
-            alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next.at.toEpochMilli(), intent)
+            alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next.toEpochMilli(), intent)
         } else {
-            alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next.at.toEpochMilli(), intent)
+            alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next.toEpochMilli(), intent)
         }
+    }
+
+    /** The soonest reminder; one already due and not yet posted (its alarm moved by a reschedule, or late) is now. */
+    suspend fun nextAlarm(db: GhostBlueDatabase, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): Instant? {
+        if (due(db, now, zone).isNotEmpty()) return now
+        return upcoming(db, now, zone).firstOrNull()?.at
     }
 
     /** Reminders due at [now]: today's precondition times up to two hours late, and dated maintenance. */

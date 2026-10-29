@@ -14,6 +14,7 @@ import com.saivenkatkrishna.ghostblue.widgets.ChargeTileService
 import com.saivenkatkrishna.ghostblue.widgets.ClimateTileService
 import com.saivenkatkrishna.ghostblue.widgets.LockTileService
 import com.saivenkatkrishna.ghostblue.widgets.VehicleWidgetReceiver
+import com.saivenkatkrishna.ghostblue.widgets.WovenWidgetReceiver
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
@@ -552,6 +553,9 @@ private fun NotificationSettings() {
         }
         NavRow("Add Charge Dial widget", "The battery as a dial", Icons.Rounded.AddToHomeScreen, tag = "addDialWidget") {
             widgets.requestPinAppWidget(ComponentName(context, ChargeDialWidgetReceiver::class.java), null, null)
+        }
+        NavRow("Add Woven Wordmark widget", "The charge fills the model lettering", Icons.Rounded.AddToHomeScreen, tag = "addWovenWidget") {
+            widgets.requestPinAppWidget(ComponentName(context, WovenWidgetReceiver::class.java), null, null)
         }
     }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

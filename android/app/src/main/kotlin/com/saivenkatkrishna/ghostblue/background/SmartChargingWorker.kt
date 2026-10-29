@@ -5,9 +5,12 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
+import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
+import androidx.work.ForegroundInfo
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
@@ -16,7 +19,10 @@ import com.saivenkatkrishna.ghostblue.GhostBlueApplication
 import com.saivenkatkrishna.ghostblue.data.account.SmartChargingReconciliation
 import com.saivenkatkrishna.ghostblue.data.charging.SDGESmartChargingSchedule
 import com.saivenkatkrishna.ghostblue.data.db.GhostBlueDatabase
+import com.saivenkatkrishna.ghostblue.notifications.Channel
+import com.saivenkatkrishna.ghostblue.notifications.Notifier
 import com.saivenkatkrishna.ghostblue.ui.commandErrorMessage
+import java.time.Duration
 import java.time.Instant
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.NonCancellable
@@ -35,18 +41,33 @@ object SmartChargingScheduler {
     /** Seconds after a boundary to run, so the car's own schedule has switched first. */
     const val SETTLE_SECONDS = 60L
 
-    /** The next run: just after the next boundary, or null with no car using smart charging. */
-    suspend fun nextRun(db: GhostBlueDatabase, now: Instant = Instant.now()): Instant? {
-        if (db.vehicles().all().none { it.smartChargingEnabled }) return null
+    /** How late a boundary's run may still happen; after that, the next boundary's. */
+    private const val MISSED_RUN_GRACE_SECONDS = 2 * 3600L
+
+    /**
+     * The next run: just after the next boundary, or null with no car using
+     * smart charging. A boundary that passed without its run (an alarm moved
+     * by a reschedule, or held back by Doze) runs now, unless [afterRun]: the
+     * run just made is all that boundary gets.
+     */
+    suspend fun nextRun(db: GhostBlueDatabase, now: Instant = Instant.now(), afterRun: Boolean = false): Instant? {
+        val cars = db.vehicles().all().filter { it.smartChargingEnabled }
+        if (cars.isEmpty()) return null
+        val missed = SDGESmartChargingSchedule.mostRecentTransition(now)
+        if (!afterRun && missed != null && Duration.between(missed, now).seconds < MISSED_RUN_GRACE_SECONDS &&
+            cars.any { car -> car.smartChargingLastRunAt.let { it == null || it < missed } }
+        ) {
+            return maxOf(now, missed.plusSeconds(SETTLE_SECONDS))
+        }
         val boundary = SDGESmartChargingSchedule.transitions(now, count = 1).firstOrNull()?.date ?: return null
         return boundary.plusSeconds(SETTLE_SECONDS)
     }
 
-    suspend fun schedule(context: Context) {
+    suspend fun schedule(context: Context, afterRun: Boolean = false) {
         val graph = (context.applicationContext as GhostBlueApplication).graph
         val alarms = context.getSystemService(AlarmManager::class.java)
         val intent = pendingIntent(context)
-        val next = nextRun(graph.db)
+        val next = nextRun(graph.db, afterRun = afterRun)
         if (next == null) {
             alarms.cancel(intent)
             return
@@ -107,8 +128,18 @@ class SmartChargingWorker(context: Context, params: WorkerParameters) : Coroutin
             }
             graph.refreshWidgets()
         } finally {
-            withContext(NonCancellable) { SmartChargingScheduler.schedule(applicationContext) }
+            withContext(NonCancellable) { SmartChargingScheduler.schedule(applicationContext, afterRun = true) }
         }
         return Result.success()
+    }
+
+    /** Expedited work runs as a foreground service before Android 12, which must show a notification. */
+    override suspend fun getForegroundInfo(): ForegroundInfo {
+        val notification = graph.notifier.notification(Channel.SMART_CHARGING, null, "Smart charging", "Checking each car's charging schedule...")
+            .setOngoing(true)
+            .setSilent(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
+        return ForegroundInfo(Notifier.SMART_CHARGING_RUN_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
     }
 }

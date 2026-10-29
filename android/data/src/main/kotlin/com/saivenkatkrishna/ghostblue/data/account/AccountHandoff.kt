@@ -17,8 +17,10 @@ data class HandoffAccount(
     val pin: String,
     val brand: String,
     val region: String,
-    val refreshToken: String = "",
 )
+
+/** What applying the phone's accounts changed: new ones to sign in, and known ones whose credentials changed. */
+data class HandoffChanges(val added: List<HandoffAccount>, val updated: List<BBAccount>)
 
 /**
  * The phone's accounts sent to the watch over Wear OS's Data Layer, which
@@ -39,53 +41,65 @@ object AccountHandoff {
         pin = account.pin,
         brand = account.brand,
         region = account.region,
-        refreshToken = account.refreshToken,
     )
 
     fun encode(accounts: List<HandoffAccount>): ByteArray = json.encodeToString(serializer, accounts).encodeToByteArray()
 
     fun decode(data: ByteArray): List<HandoffAccount> = json.decodeFromString(serializer, data.decodeToString())
 
-    /** Same login: username (any case), brand and region. */
+    /** Same login: username (any case), brand and region. The test account is the Fake brand, whichever brand it was added under. */
     fun matches(account: BBAccount, handoff: HandoffAccount): Boolean =
         account.username.equals(handoff.username, ignoreCase = true) &&
-            account.brand == handoff.brand && account.region == handoff.region
+            effectiveBrand(account.username, account.password, account.brand) == effectiveBrand(handoff.username, handoff.password, handoff.brand) &&
+            account.region == handoff.region
+
+    private fun effectiveBrand(username: String, password: String, brand: String): Brand =
+        AccountSetup.effectiveBrand(username, password, Brand.fromRawValue(brand) ?: Brand.HYUNDAI)
+
+    /** One login, for remembering accounts across handoffs (see the watch's sign-out and failed sign-ins). */
+    fun key(handoff: HandoffAccount): String =
+        listOf(handoff.username.lowercase(), effectiveBrand(handoff.username, handoff.password, handoff.brand).rawValue, handoff.region).joinToString("|")
+
+    fun key(account: BBAccount): String = key(from(account))
 
     /**
      * Stores [accounts]: new ones are returned for the caller to sign in
-     * (with [AccountSetup]); known ones get the phone's current credentials.
+     * (with [AccountSetup]); known ones get the phone's current credentials,
+     * and a new sign-in.
      */
-    suspend fun apply(accounts: List<HandoffAccount>, db: GhostBlueDatabase): List<HandoffAccount> = db.withTransaction {
+    suspend fun apply(accounts: List<HandoffAccount>, db: GhostBlueDatabase): HandoffChanges = db.withTransaction {
         val stored = db.accounts().all()
         val added = mutableListOf<HandoffAccount>()
+        val updated = mutableListOf<BBAccount>()
         for (handoff in accounts) {
             val existing = stored.firstOrNull { matches(it, handoff) }
             if (existing == null) {
-                added += handoff
-                continue
-            }
-            val credentialsChanged = existing.password != handoff.password || existing.pin != handoff.pin
-            val tokenChanged = handoff.refreshToken.isNotEmpty() && existing.refreshToken != handoff.refreshToken
-            if (credentialsChanged || tokenChanged) {
+                if (added.none { key(it) == key(handoff) }) added += handoff
+            } else if (existing.password != handoff.password || existing.pin != handoff.pin) {
                 existing.password = handoff.password
                 existing.pin = handoff.pin
-                if (tokenChanged) existing.refreshToken = handoff.refreshToken
-                // New credentials mean a new sign-in; the watch's session outlives the phone's new refresh token.
-                if (credentialsChanged) existing.serializedAuthToken = null
+                existing.serializedAuthToken = null
                 db.accounts().update(existing)
+                updated += existing
             }
         }
-        added
+        HandoffChanges(added, updated)
     }
 
-    /** Signs in each new account from the phone; returns the ones that failed, with why. */
+    /**
+     * Applies [accounts] and signs in the new ones; a known account whose
+     * credentials changed drops its client, which holds the old password.
+     * Returns the new ones that failed, with why.
+     */
     suspend fun signInNew(
         accounts: List<HandoffAccount>,
         db: GhostBlueDatabase,
         controllers: AccountControllers,
     ): List<Pair<HandoffAccount, Exception>> {
+        val changes = apply(accounts, db)
+        changes.updated.forEach { controllers.forget(it.id) }
         val failures = mutableListOf<Pair<HandoffAccount, Exception>>()
-        for (handoff in apply(accounts, db)) {
+        for (handoff in changes.added) {
             try {
                 AccountSetup.addAccount(
                     db,
