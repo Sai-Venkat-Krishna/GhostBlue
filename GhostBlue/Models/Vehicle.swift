@@ -743,17 +743,31 @@ extension BBVehicle {
 
     static let statusWaitingManager = StatusWaitingManager()
 
+    /// Where `waitForStatusChange` is, for UI that draws the wait as
+    /// progress. The delays are the planned sleeps, so a view can pace its
+    /// animation to the real wait instead of guessing.
+    enum StatusWaitStep: Sendable, Equatable {
+        /// The command was accepted; sleeping before the first check.
+        case commandSent(delaySeconds: Int)
+        /// Reading the vehicle's status. `attempt` is 1-based.
+        case checking(attempt: Int, of: Int)
+        /// The vehicle hasn't changed yet; sleeping before the next check.
+        case retrying(delaySeconds: Int, attempt: Int, of: Int)
+    }
+
     @MainActor
     func waitForStatusChange(
         modelContext: ModelContext,
         condition: @escaping @Sendable (VehicleStatus) -> Bool,
         statusMessageUpdater: (@Sendable (String) -> Void)? = nil,
+        stepUpdater: (@MainActor (StatusWaitStep) -> Void)? = nil,
         maxAttempts: Int = 3,
         initialDelaySeconds: Int = 10,
         retryDelaySeconds: Int = 10,
     ) async throws {
         // Initial delay to allow command to process
         statusMessageUpdater?("Command sent")
+        stepUpdater?(.commandSent(delaySeconds: initialDelaySeconds))
         try await interruptibleSleep(seconds: initialDelaySeconds)
 
         var currentAttempt = 0
@@ -764,6 +778,8 @@ extension BBVehicle {
             guard let account else {
                 throw APIError(message: "Account not found for vehicle")
             }
+
+            stepUpdater?(.checking(attempt: currentAttempt + 1, of: maxAttempts))
 
             // Post-command verification needs to reflect the vehicle's
             // actual state, not the backend's cached snapshot.
@@ -784,6 +800,13 @@ extension BBVehicle {
             if currentAttempt < maxAttempts {
                 statusMessageUpdater?(
                     "Waiting for vehicle (\(currentAttempt)/\(maxAttempts))"
+                )
+                stepUpdater?(
+                    .retrying(
+                        delaySeconds: retryDelaySeconds,
+                        attempt: currentAttempt,
+                        of: maxAttempts
+                    )
                 )
                 try await interruptibleSleep(seconds: retryDelaySeconds)
             }

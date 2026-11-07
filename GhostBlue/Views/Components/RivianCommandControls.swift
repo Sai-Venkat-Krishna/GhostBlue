@@ -18,12 +18,13 @@ import UIKit
 
 struct RivianCommandControls: View {
     let bbVehicle: BBVehicle
+    /// Lets the Controls sheet zoom out of its button.
+    var zoomNamespace: Namespace.ID?
     var onMore: () -> Void = {}
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    @State private var inProgress = false
-    @State private var errorText: String?
-    @State private var currentTask: Task<Void, Never>?
+    private var tracker: RemoteCommandTracker { RemoteCommands.tracker(.lock, for: bbVehicle) }
 
     private var isLocked: Bool {
         guard bbVehicle.modelContext != nil else { return false }
@@ -33,60 +34,48 @@ struct RivianCommandControls: View {
     var body: some View {
         VStack(spacing: RV.Space.m) {
             HStack(spacing: 24) {
-                RVCircleButton(title: "Lock", systemImage: "lock.fill",
-                               active: isLocked, dimmed: inProgress) { send(lock: true) }
-                RVCircleButton(title: "Unlock", systemImage: "lock.open.fill",
-                               active: !isLocked, dimmed: inProgress) { send(lock: false) }
+                // Neither button is filled while a command runs: the tapped
+                // one traces its outline, and the fill lands on the state
+                // the vehicle confirms.
+                RVCircleButton(
+                    title: "Lock",
+                    systemImage: "lock.fill",
+                    active: isLocked && !tracker.isRunning,
+                    dimmed: tracker.isRunning,
+                    command: tracker,
+                    commandTag: "lock"
+                ) { send(lock: true) }
+                RVCircleButton(
+                    title: "Unlock",
+                    systemImage: "lock.open.fill",
+                    active: !isLocked && !tracker.isRunning,
+                    dimmed: tracker.isRunning,
+                    command: tracker,
+                    commandTag: "unlock"
+                ) { send(lock: false) }
                 RVCircleButton(title: "Controls", systemImage: "square.grid.2x2.fill", action: onMore)
+                    .gbZoomSource("rivian-controls", in: zoomNamespace)
             }
-            if inProgress || errorText != nil {
-                Text(errorText ?? "Sending command…")
-                    .font(.caption)
-                    .foregroundStyle(errorText != nil ? RV.danger : RV.inkSecondary)
-                    .lineLimit(1)
-                    .transition(.opacity)
+            if let status = tracker.statusText {
+                Label {
+                    Text(status).lineLimit(1)
+                } icon: {
+                    if tracker.errorMessage != nil {
+                        Image(systemName: "xmark.octagon.fill")
+                    } else if tracker.didSucceed {
+                        Image(systemName: "checkmark.circle.fill")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(tracker.errorMessage != nil ? RV.danger : RV.inkSecondary)
+                .contentTransition(.opacity)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: inProgress)
+        .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.4, dampingFraction: 0.85), value: tracker.phase)
     }
 
     private func send(lock shouldLock: Bool) {
-        guard !inProgress else { return }
-        currentTask = Task { await perform(shouldLock) }
-    }
-
-    @MainActor
-    private func perform(_ shouldLock: Bool) async {
-        inProgress = true
-        errorText = nil
-        defer { inProgress = false; currentTask = nil }
-        do {
-            guard let account = bbVehicle.account else {
-                throw APIError(message: "Account not found for vehicle")
-            }
-            let context = modelContext
-            if shouldLock {
-                try await account.lockVehicle(bbVehicle, modelContext: context)
-            } else {
-                try await account.unlockVehicle(bbVehicle, modelContext: context)
-            }
-            let targetStatus: VehicleStatus.LockStatus = shouldLock ? .locked : .unlocked
-            try await bbVehicle.waitForStatusChange(
-                modelContext: context,
-                condition: { status in status.lockStatus == targetStatus },
-                statusMessageUpdater: { _ in }
-            )
-            #if canImport(UIKit)
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-            #endif
-        } catch is CancellationError {
-            // user navigated away
-        } catch {
-            errorText = (error as? APIError)?.message ?? error.localizedDescription
-            Task {
-                try? await Task.sleep(for: .seconds(4))
-                await MainActor.run { errorText = nil }
-            }
-        }
+        RemoteCommands.setLocked(shouldLock, vehicle: bbVehicle, modelContext: modelContext)
     }
 }

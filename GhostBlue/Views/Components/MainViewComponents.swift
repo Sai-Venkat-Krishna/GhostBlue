@@ -144,51 +144,79 @@ struct EmptyAccountsView: View {
 struct EmptyVehiclesView: View {
     @Binding var isLoading: Bool
     @Binding var lastError: APIError?
+    /// Index into `loadingStages` of the step that is running.
+    var loadingStage = 0
     var onRetry: (() async -> Void)?
+
+    static let loadingStages = ["Signing in", "Loading your vehicles", "Reading vehicle status"]
 
     var body: some View {
         ZStack {
             GBBackground(colors: AppSettings.shared.themeColors)
-            VStack(spacing: 20) {
-                if isLoading {
-                    BrandProgressView()
-                        .scaleEffect(1.5)
-                        .tint(AppSettings.shared.accentColor)
-                    Text("Loading your garage…")
-                        .foregroundColor(.secondary)
-                } else {
-                    Image(
-                        systemName: lastError != nil
-                            ? "exclamationmark.triangle.fill"
-                            : "car.side.fill"
-                    )
-                    .font(.system(size: 64))
-                    .foregroundStyle(
-                        lastError != nil ? Color.orange : AppSettings.shared.accentColor
-                    )
-
-                    Text(lastError != nil ? "Couldn’t refresh" : "No vehicles found")
-                        .font(.title.bold())
-                }
-
-                if let error = lastError {
-                    ErrorDetailsView(
-                        error: ActionError(action: "Load vehicles", error: error)
-                    )
-                    .padding(.horizontal)
-
-                    Button("Try Again") {
-                        lastError = nil
-                        Task {
-                            await onRetry?()
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(isLoading)
-                }
+            if isLoading {
+                garageLoading
+                    .transition(.opacity)
+            } else {
+                emptyOrError
+                    .transition(.opacity)
             }
-            .padding()
         }
+        .animation(.easeInOut(duration: 0.3), value: isLoading)
         .ghostBlueColorScheme()
+    }
+
+    /// The first load: the steps it is working through, over placeholders
+    /// shaped like the dashboard that is about to appear.
+    private var garageLoading: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Loading your garage")
+                .font(.gbDisplay)
+                .padding(.top, 24)
+
+            GBStagedProgress(stages: Self.loadingStages, current: loadingStage)
+                .padding(18)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .gbGlassCard(radius: GBDesign.tileRadius)
+
+            GBCommandCardSkeleton()
+            GBCommandCardSkeleton()
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, GBDesign.screenPadding)
+        .frame(maxWidth: 520)
+    }
+
+    private var emptyOrError: some View {
+        VStack(spacing: 20) {
+            Image(
+                systemName: lastError != nil
+                    ? "exclamationmark.triangle.fill"
+                    : "car.side.fill"
+            )
+            .font(.system(size: 64))
+            .foregroundStyle(
+                lastError != nil ? Color.orange : AppSettings.shared.accentColor
+            )
+
+            Text(lastError != nil ? "Couldn’t refresh" : "No vehicles found")
+                .font(.title.bold())
+
+            if let error = lastError {
+                ErrorDetailsView(
+                    error: ActionError(action: "Load vehicles", error: error)
+                )
+                .padding(.horizontal)
+
+                Button("Try Again") {
+                    lastError = nil
+                    Task {
+                        await onRetry?()
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isLoading)
+            }
+        }
+        .padding()
     }
 }

@@ -24,6 +24,7 @@ struct HomeView: View {
     var onSuccessfulRefresh: (() -> Void)?
 
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var appSettings = AppSettings.shared
 
     @State private var showingSettings = false
@@ -88,6 +89,7 @@ struct HomeView: View {
         .tint(appSettings.accentColor)
         .sheet(isPresented: $showingSettings) {
             SettingsView()
+                .gbZoomTransition(from: "home-more", in: transition)
         }
         .sheet(isPresented: $showingOwnershipHub) {
             NavigationStack {
@@ -98,6 +100,7 @@ struct HomeView: View {
                         }
                     }
             }
+            .gbZoomTransition(from: "home-more", in: transition)
         }
         .sheet(isPresented: $showingErrorDetails) {
             if let lastActionError {
@@ -124,12 +127,16 @@ struct HomeView: View {
                 if errorMessage != nil {
                     errorBanner
                         .cardEntry(visible: cardsVisible, delay: 0.02)
+                        .transition(
+                            reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity)
+                        )
                 }
 
                 if isRefreshing, bbVehicle.lastUpdated == nil {
-                    GBSkeletonCard(height: 210)
-                    GBSkeletonCard(height: 72)
-                    GBSkeletonCard(height: 72)
+                    // First load: placeholders shaped like the dashboard,
+                    // which fades in over them once the status arrives.
+                    GBHomeSkeleton()
+                        .transition(.opacity)
                 } else {
                     vehicleVisualHero(for: bbVehicle)
                         .cardEntry(visible: cardsVisible, delay: 0.04)
@@ -156,6 +163,11 @@ struct HomeView: View {
                 }
                 .padding(.horizontal, GBDesign.screenPadding)
                 .padding(.bottom, 24)
+                .animation(.easeInOut(duration: 0.35), value: isRefreshing && bbVehicle.lastUpdated == nil)
+                .animation(
+                    reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.45, dampingFraction: 0.85),
+                    value: errorMessage != nil
+                )
             }
             .scrollIndicators(.hidden)
             .scrollEdgeEffectStyle(.hard, for: [.top, .bottom])
@@ -196,10 +208,12 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 2) {
                 vehicleSwitcher(for: bbVehicle)
 
-                if let lastUpdated = bbVehicle.lastUpdated {
-                    Text("Updated \(lastUpdated.formatted(.relative(presentation: .named)))")
+                if let statusLine = headerStatusLine(for: bbVehicle) {
+                    Text(statusLine)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                        .contentTransition(.opacity)
+                        .animation(.easeInOut(duration: 0.25), value: statusLine)
                 }
             }
 
@@ -219,6 +233,7 @@ struct HomeView: View {
 
             refreshButton
             HomeMoreActionsButton(
+                zoomNamespace: transition,
                 coordinate: appSettings.hideVehicleLocation ? nil : bbVehicle.coordinate,
                 destinationName: bbVehicle.displayName,
                 onVehicleCenter: { showingOwnershipHub = true },
@@ -269,6 +284,14 @@ struct HomeView: View {
         }
     }
 
+    /// "Refreshing status…" while a refresh runs, otherwise the age of the
+    /// last status.
+    private func headerStatusLine(for vehicle: BBVehicle) -> String? {
+        if isRefreshing { return "Refreshing status…" }
+        guard let lastUpdated = vehicle.lastUpdated else { return nil }
+        return "Updated \(lastUpdated.formatted(.relative(presentation: .named)))"
+    }
+
     private var isOnCooldown: Bool {
         guard let last = lastManualRefreshDate else { return false }
         return Date().timeIntervalSince(last) < manualRefreshCooldown
@@ -289,18 +312,17 @@ struct HomeView: View {
             Task { await performRefresh(forced: true) }
         } label: {
             Group {
-                if isRefreshing {
+                if isRefreshing, reduceMotion {
                     BrandProgressView()
                         .scaleEffect(0.8)
-                } else if showRefreshSuccess {
-                    Image(systemName: "checkmark")
-                        .foregroundStyle(.green)
-                } else if showCooldownFeedback {
-                    Image(systemName: "clock")
-                        .foregroundStyle(.orange)
                 } else {
-                    Image(systemName: "arrow.clockwise")
+                    // One glyph that turns while refreshing, then morphs
+                    // into a check (or a clock while cooling down).
+                    Image(systemName: refreshSymbol)
                         .fontWeight(.semibold)
+                        .foregroundStyle(refreshSymbolTint)
+                        .contentTransition(.symbolEffect(.replace))
+                        .symbolEffect(.rotate, options: .repeating, isActive: isRefreshing)
                 }
             }
             .frame(width: 44, height: 44)
@@ -308,9 +330,22 @@ struct HomeView: View {
         }
         .buttonStyle(.plain)
         .disabled(isRefreshing)
+        .accessibilityLabel(isRefreshing ? "Refreshing" : "Refresh status")
         .animation(.spring(response: 0.4, dampingFraction: 0.6), value: isRefreshing)
         .animation(.spring(response: 0.4, dampingFraction: 0.6), value: showRefreshSuccess)
         .animation(.spring(response: 0.4, dampingFraction: 0.6), value: showCooldownFeedback)
+    }
+
+    private var refreshSymbol: String {
+        if showRefreshSuccess { return "checkmark" }
+        if showCooldownFeedback { return "clock" }
+        return "arrow.clockwise"
+    }
+
+    private var refreshSymbolTint: Color {
+        if showRefreshSuccess { return .green }
+        if showCooldownFeedback { return .orange }
+        return .primary
     }
 
     // MARK: - Vehicle Visual
@@ -341,9 +376,14 @@ struct HomeView: View {
                 Label(state.title, systemImage: state.systemImage)
                     .font(.caption.weight(.bold))
                     .foregroundStyle(state.tint)
+                    .contentTransition(.symbolEffect(.replace))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 7)
                     .background(state.tint.opacity(0.13), in: Capsule())
+                    .animation(
+                        reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.4, dampingFraction: 0.8),
+                        value: state.title
+                    )
             }
 
             ViewThatFits(in: .horizontal) {
@@ -428,6 +468,7 @@ struct HomeView: View {
             VStack(alignment: .trailing, spacing: 6) {
                 Text("\(Int(evStatus.evRange.percentage))%")
                     .font(.title.bold())
+                    .contentTransition(.numericText(value: evStatus.evRange.percentage))
                 Text(
                     evStatus.evRange.range.units.format(
                         evStatus.evRange.range.length,
@@ -436,6 +477,7 @@ struct HomeView: View {
                 )
                 .font(.caption.bold())
                 .foregroundStyle(.secondary)
+                .contentTransition(.numericText(value: evStatus.evRange.range.length))
 
                 if evStatus.charging {
                     if evStatus.chargeTime > .seconds(0) {
@@ -462,6 +504,8 @@ struct HomeView: View {
                     }
                 }
             }
+            .animation(reduceMotion ? nil : .snappy, value: evStatus.evRange.percentage)
+            .animation(reduceMotion ? nil : .snappy, value: evStatus.evRange.range.length)
         } else if let gasRange = vehicle.gasRange {
             VStack(alignment: .trailing, spacing: 5) {
                 Image(systemName: "fuelpump.fill")
@@ -473,7 +517,9 @@ struct HomeView: View {
                     )
                 )
                 .font(.headline.bold())
+                .contentTransition(.numericText(value: gasRange.range.length))
             }
+            .animation(reduceMotion ? nil : .snappy, value: gasRange.range.length)
         }
     }
 
@@ -666,6 +712,7 @@ struct HomeView: View {
                 } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                         .labelStyle(.iconOnly)
+                        .symbolEffect(.rotate, options: .repeating, isActive: isRefreshing && !reduceMotion)
                         .frame(width: 38, height: 38)
                         .background(Color.primary.opacity(0.07), in: Circle())
                 }
@@ -990,10 +1037,13 @@ struct HomeView: View {
                                 style: StrokeStyle(lineWidth: 10, lineCap: .round)
                             )
                             .rotationEffect(.degrees(-90))
+                            .animation(reduceMotion ? nil : .spring(response: 0.8, dampingFraction: 0.9), value: progress)
 
                         VStack(spacing: 1) {
                             Text("\(Int(current))%")
                                 .font(.title2.bold())
+                                .contentTransition(.numericText(value: current))
+                                .animation(reduceMotion ? nil : .snappy, value: Int(current))
                             Text("of \(Int(target))%")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
@@ -1588,6 +1638,7 @@ struct EVRangeHero: View {
     let evStatus: VehicleStatus.EVStatus
     var statusDate: Date?
     @State private var appSettings = AppSettings.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var percentage: Double { evStatus.evRange.percentage }
 
@@ -1664,6 +1715,8 @@ struct EVRangeHero: View {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(formattedRange)
                         .font(.title2.weight(.bold))
+                        .contentTransition(.numericText())
+                        .animation(reduceMotion ? nil : .snappy, value: formattedRange)
                     Text("est. range")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -1695,13 +1748,15 @@ struct EVRangeHero: View {
         }
         .padding(18)
         .gbGlassCard(radius: GBDesign.heroRadius)
-        .animation(.spring(response: 0.6, dampingFraction: 0.85), value: Int(percentage))
+        .animation(reduceMotion ? nil : .spring(response: 0.6, dampingFraction: 0.85), value: Int(percentage))
     }
 }
 
 /// Owns its presentation state so tapping the overflow button invalidates
 /// only this small subtree instead of rebuilding the full Home dashboard.
 private struct HomeMoreActionsButton: View {
+    /// Settings and Vehicle Center zoom out of this button.
+    var zoomNamespace: Namespace.ID?
     let coordinate: CLLocationCoordinate2D?
     let destinationName: String
     let onVehicleCenter: () -> Void
@@ -1720,6 +1775,7 @@ private struct HomeMoreActionsButton: View {
                 .gbGlassCircle()
         }
         .buttonStyle(.plain)
+        .gbZoomSource("home-more", in: zoomNamespace)
         .accessibilityLabel("More vehicle actions")
         .confirmationDialog(
             "Vehicle Actions",
@@ -1764,6 +1820,7 @@ private struct VehicleBriefingItem: Identifiable {
 struct FuelRangeHero: View {
     let gasRange: VehicleStatus.FuelRange
     @State private var appSettings = AppSettings.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var percentage: Double { gasRange.percentage }
 
@@ -1802,6 +1859,8 @@ struct FuelRangeHero: View {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(formattedRange)
                         .font(.title2.weight(.bold))
+                        .contentTransition(.numericText())
+                        .animation(reduceMotion ? nil : .snappy, value: formattedRange)
                     Text("est. range")
                         .font(.caption)
                         .foregroundStyle(.secondary)

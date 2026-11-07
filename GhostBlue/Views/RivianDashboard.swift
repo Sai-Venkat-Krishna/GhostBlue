@@ -28,6 +28,7 @@ struct RivianDashboard: View {
     var onOpenCharging: () -> Void = {}
     var onOpenVehicleCenter: () -> Void = {}
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showingControls = false
     @State private var showingClimate = false
     @State private var showingService = false
@@ -61,7 +62,11 @@ struct RivianDashboard: View {
                 }
                 AdaptiveColumns(isWide: isWide, spacing: RV.Space.xl) {
                     heroCard
-                    RivianCommandControls(bbVehicle: bbVehicle, onMore: { showingControls = true })
+                    RivianCommandControls(
+                        bbVehicle: bbVehicle,
+                        zoomNamespace: transition,
+                        onMore: { showingControls = true }
+                    )
                 } trailing: {
                     tileGrid
                 }
@@ -75,13 +80,16 @@ struct RivianDashboard: View {
         .sheet(isPresented: $showingControls) {
             RivianControls(bbVehicle: bbVehicle, transition: transition,
                            onClose: { showingControls = false })
+                .gbZoomTransition(from: "rivian-controls", in: transition)
         }
         .sheet(isPresented: $showingClimate) {
             RivianClimateView(bbVehicle: bbVehicle, transition: transition,
                               onClose: { showingClimate = false })
+                .gbZoomTransition(from: "rivian-climate", in: transition)
         }
         .sheet(isPresented: $showingService) {
             RivianService(bbVehicle: bbVehicle, onClose: { showingService = false })
+                .gbZoomTransition(from: "rivian-service", in: transition)
         }
     }
 
@@ -94,6 +102,8 @@ struct RivianDashboard: View {
                 Text(statusLine)
                     .font(.subheadline)
                     .foregroundStyle(RV.inkSecondary)
+                    .contentTransition(.numericText())
+                    .animation(reduceMotion ? nil : .snappy, value: statusLine)
             }
             Spacer()
             HStack(spacing: 18) {
@@ -102,12 +112,14 @@ struct RivianDashboard: View {
                         .font(.system(size: 20))
                         .foregroundStyle(RV.ink)
                 }
+                .gbZoomSource("rivian-service", in: transition)
                 .accessibilityLabel("Service")
                 Button(action: onOpenSettings) {
                     Image(systemName: "person.crop.circle")
                         .font(.system(size: 28))
                         .foregroundStyle(RV.ink)
                 }
+                .gbZoomSource("home-more", in: transition)
                 .accessibilityLabel("Account and settings")
             }
         }
@@ -212,6 +224,7 @@ struct RivianDashboard: View {
         ) {
             RVTile(title: "Climate", systemImage: "fan.fill",
                    detail: climateOn ? "On" : "Off", color: RV.climate) { showingClimate = true }
+                .gbZoomSource("rivian-climate", in: transition)
             RVTile(title: "Energy", systemImage: "bolt.fill",
                    detail: batteryPercent.map { "\($0)%" } ?? "—", color: RV.energy, action: onOpenCharging)
             RVTile(title: "Vehicle Center", systemImage: "car.fill",

@@ -44,12 +44,25 @@ extension View {
     }
 
     /// Stagger-in entrance: slides up 18pt and fades in with a spring, delayed by `delay` seconds.
+    /// Under Reduce Motion it only fades.
     func cardEntry(visible: Bool, delay: Double) -> some View {
-        self
-            .offset(y: visible ? 0 : 18)
+        modifier(CardEntryModifier(visible: visible, delay: delay))
+    }
+}
+
+private struct CardEntryModifier: ViewModifier {
+    let visible: Bool
+    let delay: Double
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .offset(y: visible || reduceMotion ? 0 : 18)
             .opacity(visible ? 1 : 0)
             .animation(
-                .spring(response: 0.55, dampingFraction: 0.88).delay(delay),
+                reduceMotion
+                    ? .easeOut(duration: 0.25)
+                    : .spring(response: 0.55, dampingFraction: 0.88).delay(delay),
                 value: visible
             )
     }

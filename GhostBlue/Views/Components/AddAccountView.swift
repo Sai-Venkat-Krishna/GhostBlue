@@ -51,6 +51,7 @@ struct ErrorBox: View {
 struct AddAccountView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var username = ""
     @State private var password = ""
     @State private var refreshToken = ""
@@ -59,6 +60,8 @@ struct AddAccountView: View {
     @State private var selectedBrand: Brand = .hyundai
     @State private var selectedRegion: Region = .usa
     @State private var isLoading = false
+    /// The running step of sign-in, for the overlay's checklist.
+    @State private var signInStage = 0
     /// Populated when login or first vehicle-load fails so the form can
     /// render a full `ErrorDetailsView` (headline + summary + technical
     /// details collapsed by default).
@@ -134,14 +137,23 @@ struct AddAccountView: View {
         .disabled(isLoading)
         .overlay {
             if isLoading {
-                LoadingOverlayView(brandName: selectedBrand.displayName)
-                    .transition(.asymmetric(
-                        insertion: .scale(scale: 0.8).combined(with: .opacity),
-                        removal: .scale(scale: 1.1).combined(with: .opacity),
-                    ))
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isLoading)
+                LoadingOverlayView(brandName: selectedBrand.displayName, stage: signInStage)
+                    .transition(
+                        reduceMotion
+                            ? .opacity
+                            : .asymmetric(
+                                insertion: .scale(scale: 0.9).combined(with: .opacity),
+                                removal: .scale(scale: 1.05).combined(with: .opacity)
+                            )
+                    )
             }
         }
+        // On the container, not the overlay's content, so the overlay's
+        // insertion and removal animate too.
+        .animation(
+            reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.4, dampingFraction: 0.8),
+            value: isLoading
+        )
         .mfaFlow(state: mfaState)
         .onAppear {
             focusedField = .username
@@ -329,6 +341,7 @@ struct AddAccountView: View {
     }
 
     private func addAccount() async {
+        signInStage = 0
         isLoading = true
         saveError = nil
 
@@ -403,6 +416,7 @@ struct AddAccountView: View {
             }
             try modelContext.save()
 
+            signInStage = 1
             try await account.loadVehicles(modelContext: modelContext)
 
             await MainActor.run {

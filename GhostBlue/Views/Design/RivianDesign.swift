@@ -159,6 +159,7 @@ struct RVTile: View {
     let detail: String
     let color: Color
     let action: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Button(action: action) {
@@ -172,7 +173,11 @@ struct RVTile: View {
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
-                Text(detail).font(.subheadline).foregroundStyle(.white.opacity(0.85))
+                Text(detail)
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.85))
+                    .contentTransition(.numericText())
+                    .animation(reduceMotion ? nil : .snappy, value: detail)
             }
             .frame(maxWidth: .infinity, minHeight: 124, alignment: .leading)
             .padding(18)
@@ -184,32 +189,78 @@ struct RVTile: View {
     }
 }
 
-/// Rivian circular command button (active = solid ink).
+/// Rivian circular command button (active = solid ink). When `command` is
+/// set and its tag matches `commandTag`, the circle's outline shows that
+/// command's progress (see `commandProgressBorder`).
 struct RVCircleButton: View {
     let title: String
     let systemImage: String
     var active = false
     var dimmed = false
+    var command: RemoteCommandTracker?
+    var commandTag: String?
     let action: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var isCommandTarget: Bool {
+        guard let command, let commandTag else { return false }
+        return command.tag == commandTag
+    }
+
+    private var isPending: Bool { isCommandTarget && command?.isRunning == true }
 
     var body: some View {
         Button(action: action) {
             VStack(spacing: RV.Space.s) {
-                ZStack {
-                    Circle().fill(active ? RV.commandActiveFill : RV.commandInactiveFill)
-                    Image(systemName: systemImage)
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(active ? RV.commandActiveIcon : RV.commandInactiveIcon)
+                Group {
+                    if let command {
+                        // Padded out so the ring traces just outside the circle.
+                        circle
+                            .padding(5)
+                            .commandProgressBorder(
+                                command,
+                                shape: .circle,
+                                tint: RV.accent,
+                                successTint: RV.accent,
+                                lineWidth: 3,
+                                showsWash: false,
+                                isActive: isCommandTarget
+                            )
+                            .padding(-5)
+                    } else {
+                        circle
+                    }
                 }
-                .frame(width: 72, height: 72)
+                .animation(
+                    reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.45, dampingFraction: 0.8),
+                    value: active
+                )
                 Text(title).font(RV.Font.label).foregroundStyle(RV.inkSecondary)
             }
         }
         .buttonStyle(.plain)
-        .disabled(dimmed)
-        .opacity(dimmed && !active ? 0.5 : 1)
+        .disabled(dimmed && !isPending)
+        .opacity(dimmed && !active && !isPending ? 0.5 : 1)
         .accessibilityLabel(title)
+        .accessibilityValue(isPending ? (command?.statusText ?? "") : "")
         .accessibilityAddTraits(active ? .isSelected : [])
+    }
+
+    private var circle: some View {
+        ZStack {
+            Circle().fill(active ? RV.commandActiveFill : RV.commandInactiveFill)
+            Image(systemName: systemImage)
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(active ? RV.commandActiveIcon : RV.commandInactiveIcon)
+                .symbolEffect(.pulse, options: .repeating, isActive: isPending && !reduceMotion)
+                .symbolEffect(
+                    .bounce,
+                    options: .nonRepeating,
+                    value: reduceMotion || !isCommandTarget ? 0 : (command?.successCount ?? 0)
+                )
+        }
+        .frame(width: 72, height: 72)
     }
 }
 

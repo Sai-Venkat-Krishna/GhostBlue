@@ -112,25 +112,32 @@ final class VehicleHeroControlTests: XCTestCase {
         let account = try XCTUnwrap(vehicle.account)
         try await account.initialize(modelContext: context)
 
-        let commands = VehicleHeroCommandCenter()
-        commands.toggleLock(for: vehicle, modelContext: context)
+        let tracker = RemoteCommands.tracker(.lock, for: vehicle)
+        RemoteCommands.toggleLock(vehicle, modelContext: context)
 
         // The tap must read as in-flight rather than instantly succeeding:
         // BlueLink round-trips are slow and the hero may not run ahead of them.
-        XCTAssertTrue(commands.isInFlight(.lock))
+        XCTAssertTrue(tracker.isRunning)
+        XCTAssertEqual(tracker.tag, "unlock")
 
         // The command reaches the vehicle...
         try await waitUntil("the vehicle to report unlocked") {
             vehicle.lockStatus == .unlocked
         }
         // ...and the hero stays in-flight until the status poll confirms it.
+        try await waitUntil("the wait to report the sent command") {
+            if case .waiting = tracker.phase { return true }
+            return false
+        }
+        XCTAssertTrue(tracker.isRunning)
         vehicle.wakeUpStatusWaiters()
         try await waitUntil("the lock region to settle") {
-            !commands.isInFlight(.lock)
+            !tracker.isRunning
         }
 
         XCTAssertEqual(vehicle.lockStatus, .unlocked)
-        XCTAssertNil(commands.errors[.lock])
+        XCTAssertEqual(tracker.phase, .succeeded)
+        XCTAssertNil(tracker.errorMessage)
     }
 
     func testClimateRegionStartsClimateWithTheSelectedPreset() async throws {
@@ -139,26 +146,26 @@ final class VehicleHeroControlTests: XCTestCase {
         let account = try XCTUnwrap(vehicle.account)
         try await account.initialize(modelContext: context)
 
-        let commands = VehicleHeroCommandCenter()
-        commands.toggleClimate(
-            for: vehicle,
+        let tracker = RemoteCommands.tracker(.climate, for: vehicle)
+        RemoteCommands.toggleClimate(
+            vehicle,
             options: ClimateOptions(),
             presetName: nil,
             presetIcon: nil,
             modelContext: context
         )
-        XCTAssertTrue(commands.isInFlight(.climate))
+        XCTAssertTrue(tracker.isRunning)
 
         try await waitUntil("climate to report on") {
             vehicle.climateStatus?.airControlOn == true
         }
         vehicle.wakeUpStatusWaiters()
         try await waitUntil("the climate region to settle") {
-            !commands.isInFlight(.climate)
+            !tracker.isRunning
         }
 
         XCTAssertEqual(vehicle.climateStatus?.airControlOn, true)
-        XCTAssertNil(commands.errors[.climate])
+        XCTAssertNil(tracker.errorMessage)
     }
 
     func testASecondTapCancelsACommandStillWaitingOnTheVehicle() async throws {
@@ -167,16 +174,40 @@ final class VehicleHeroControlTests: XCTestCase {
         let account = try XCTUnwrap(vehicle.account)
         try await account.initialize(modelContext: context)
 
-        let commands = VehicleHeroCommandCenter()
-        commands.toggleLock(for: vehicle, modelContext: context)
-        XCTAssertTrue(commands.isInFlight(.lock))
+        let tracker = RemoteCommands.tracker(.lock, for: vehicle)
+        RemoteCommands.toggleLock(vehicle, modelContext: context)
+        XCTAssertTrue(tracker.isRunning)
 
-        commands.toggleLock(for: vehicle, modelContext: context)
+        RemoteCommands.toggleLock(vehicle, modelContext: context)
 
         try await waitUntil("the cancelled region to settle") {
-            !commands.isInFlight(.lock)
+            !tracker.isRunning
         }
         // Cancelling is not a failure, so no error is surfaced on the hero.
-        XCTAssertNil(commands.errors[.lock])
+        XCTAssertEqual(tracker.phase, .idle)
+        XCTAssertNil(tracker.errorMessage)
+    }
+
+    func testAFailedCommandShowsItsOwnStateThenSettles() async throws {
+        let context = try makeContext()
+        let vehicle = try makeFakeVehicle(in: context)
+        var debug = BBDebugConfiguration()
+        debug.shouldFailLock = true
+        vehicle.debugConfiguration = debug
+        try context.save()
+        let account = try XCTUnwrap(vehicle.account)
+        try await account.initialize(modelContext: context)
+
+        // The fixture starts locked; unlock first so Lock is the next tap.
+        vehicle.lockStatus = .unlocked
+        let tracker = RemoteCommands.tracker(.lock, for: vehicle)
+        RemoteCommands.setLocked(true, vehicle: vehicle, modelContext: context)
+
+        try await waitUntil("the lock command to fail") {
+            tracker.errorMessage != nil
+        }
+        XCTAssertFalse(tracker.isRunning)
+        XCTAssertEqual(tracker.failureCount, 1)
+        XCTAssertEqual(vehicle.lockStatus, .unlocked)
     }
 }

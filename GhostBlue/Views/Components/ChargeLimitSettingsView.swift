@@ -35,12 +35,16 @@ struct ChargeLimitSettingsContent: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var acLevel: Double
     @State private var dcLevel: Double
-    @State private var isSaving = false
-    @State private var statusMessage: String?
     @State private var saveError: ActionError?
     @State private var successMessage: String?
+    @State private var appSettings = AppSettings.shared
+
+    private var tracker: RemoteCommandTracker { RemoteCommands.tracker(.chargeLimits, for: vehicle) }
+    private var isSaving: Bool { tracker.isRunning }
 
     init(vehicle: BBVehicle, onSave: (() -> Void)? = nil) {
         self.vehicle = vehicle
@@ -66,6 +70,8 @@ struct ChargeLimitSettingsContent: View {
                             .font(.title3)
                             .fontWeight(.bold)
                             .foregroundColor(.blue)
+                            .contentTransition(.numericText(value: acLevel))
+                            .animation(reduceMotion ? nil : .snappy, value: acLevel)
                     }
 
                     Slider(value: $acLevel, in: 50...100, step: 10)
@@ -91,6 +97,8 @@ struct ChargeLimitSettingsContent: View {
                             .font(.title3)
                             .fontWeight(.bold)
                             .foregroundColor(.green)
+                            .contentTransition(.numericText(value: dcLevel))
+                            .animation(reduceMotion ? nil : .snappy, value: dcLevel)
                     }
 
                     Slider(value: $dcLevel, in: 50...100, step: 10)
@@ -123,34 +131,63 @@ struct ChargeLimitSettingsContent: View {
             }
 
             Section {
-                Button(action: saveChargeLimits) {
-                    HStack {
-                        Spacer()
-                        if isSaving {
-                            BrandProgressView()
-                                .progressViewStyle(.circular)
-                            if let statusMessage {
-                                Text(statusMessage)
-                                    .padding(.leading, 8)
-                            }
-                        } else {
-                            Text("Save Charge Limits")
-                                .fontWeight(.semibold)
-                        }
-                        Spacer()
-                    }
-                }
-                .disabled(isSaving)
+                saveButton
             }
         }
         .navigationTitle("Charge Limits")
         .navigationBarTitleDisplayMode(.inline)
+        .animation(.easeInOut(duration: 0.25), value: successMessage)
+        .animation(.easeInOut(duration: 0.25), value: saveError)
         .onChange(of: acLevel) {
             successMessage = nil
         }
         .onChange(of: dcLevel) {
             successMessage = nil
         }
+    }
+
+    /// Save, with the command's progress traced around its outline.
+    private var saveButton: some View {
+        Button(action: saveChargeLimits) {
+            HStack(spacing: 10) {
+                Image(systemName: saveSymbol)
+                    .contentTransition(.symbolEffect(.replace))
+                    .symbolEffect(.pulse, options: .repeating, isActive: isSaving && !reduceMotion)
+                Text(saveTitle)
+                    .contentTransition(.opacity)
+            }
+            .font(.body.weight(.semibold))
+            .foregroundStyle(isSaving ? Color.secondary : appSettings.accentColor)
+            .frame(maxWidth: .infinity, minHeight: 50)
+            .background(
+                appSettings.accentColor.opacity(0.12),
+                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+            )
+            .commandProgressBorder(
+                tracker,
+                shape: .rounded(14),
+                tint: appSettings.accentColor,
+                successTint: .green
+            )
+            .animation(.easeInOut(duration: 0.25), value: saveTitle)
+        }
+        .buttonStyle(.plain)
+        .disabled(isSaving)
+        .listRowInsets(EdgeInsets())
+        .listRowBackground(Color.clear)
+        .accessibilityLabel(saveTitle)
+    }
+
+    private var saveTitle: String {
+        if isSaving { return tracker.statusText ?? "Sending command…" }
+        if tracker.didSucceed { return "Saved" }
+        return "Save Charge Limits"
+    }
+
+    private var saveSymbol: String {
+        if isSaving { return "arrow.up.circle" }
+        if tracker.didSucceed { return "checkmark.circle.fill" }
+        return "battery.100percent.bolt"
     }
 
     @MainActor
@@ -163,57 +200,50 @@ struct ChargeLimitSettingsContent: View {
             return
         }
 
-        isSaving = true
         saveError = nil
-        statusMessage = "Sending command..."
+        successMessage = nil
+        let targetAcLevel = acLevel
+        let targetDcLevel = dcLevel
+        let vehicle = vehicle
+        let modelContext = modelContext
 
-        Task {
+        tracker.run(tag: "save", announcement: "Charge limits saved") { tracker in
             do {
                 try await account.setTargetSOC(
                     vehicle,
-                    acLevel: Int(acLevel),
-                    dcLevel: Int(dcLevel),
+                    acLevel: Int(targetAcLevel),
+                    dcLevel: Int(targetDcLevel),
                     modelContext: modelContext
                 )
 
-                let targetAcLevel = acLevel
-                let targetDcLevel = dcLevel
-
-                // Wait for status to update
-                try await vehicle.waitForStatusChange(
-                    modelContext: modelContext,
-                    condition: { status in
-                        // Check if the target SOC values match what we set
-                        guard let evStatus = status.evStatus else { return false }
-                        return evStatus.targetSocAC == targetAcLevel && evStatus.targetSocDC == targetDcLevel
-                    },
-                    statusMessageUpdater: { message in
-                        Task { @MainActor in
-                            self.statusMessage = message
-                        }
-                    },
-                    maxAttempts: 3,
-                    initialDelaySeconds: 5,
-                    retryDelaySeconds: 5
-                )
-
-                isSaving = false
-                statusMessage = nil
-                successMessage = "Charge limits saved"
-            } catch {
-                isSaving = false
-                statusMessage = nil
-                // Don't show error if it's just a timeout waiting for status - the command likely succeeded
-                if error.localizedDescription.contains("condition not met") {
-                    // Command was sent, just couldn't verify - show success anyway
-                    successMessage = "Charge limits saved"
-                } else {
-                    saveError = ActionError(
-                        action: "Set charge limits",
-                        error: error,
-                        accountId: account.id
+                do {
+                    try await vehicle.waitForStatusChange(
+                        modelContext: modelContext,
+                        condition: { status in
+                            // Check if the target SOC values match what we set
+                            guard let evStatus = status.evStatus else { return false }
+                            return evStatus.targetSocAC == targetAcLevel
+                                && evStatus.targetSocDC == targetDcLevel
+                        },
+                        stepUpdater: { tracker.report($0) },
+                        maxAttempts: 3,
+                        initialDelaySeconds: 5,
+                        retryDelaySeconds: 5
                     )
+                } catch let error where error.localizedDescription.contains("condition not met") {
+                    // The command was sent but the vehicle hasn't echoed the
+                    // new limits yet; it usually lands, so report it saved.
                 }
+                successMessage = "Charge limits saved"
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                saveError = ActionError(
+                    action: "Set charge limits",
+                    error: error,
+                    accountId: account.id
+                )
+                throw error
             }
         }
     }

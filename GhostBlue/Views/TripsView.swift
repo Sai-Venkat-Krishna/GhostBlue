@@ -281,6 +281,7 @@ struct TripsView: View {
                 } else if isLoading, trips.isEmpty {
                     loadingCard
                         .cardEntry(visible: contentVisible, delay: 0.05)
+                        .transition(.opacity)
                 } else if let loadError {
                     errorCard(loadError)
                         .cardEntry(visible: contentVisible, delay: 0.05)
@@ -404,10 +405,12 @@ struct TripsView: View {
                 expandedTripId = nil
                 comparisonMode = false
                 comparedTripIDs = []
-                await loadTrips(for: bbVehicle)
+                // Show the saved trips (or the loading placeholders) right
+                // away; fetched trips animate in when they arrive.
                 withAnimation(.spring(response: 0.55, dampingFraction: 0.86)) {
                     contentVisible = true
                 }
+                await loadTrips(for: bbVehicle)
             }
             .onReceive(NotificationCenter.default.publisher(for: .scrollTripsToTop)) { _ in
                 withAnimation(.easeOut(duration: 0.35)) {
@@ -587,10 +590,23 @@ struct TripsView: View {
             .accessibilityLabel("Trip display and export options")
 
             if isLoading, !trips.isEmpty {
-                BrandProgressView()
+                // Saved trips stay on screen; this says new ones are coming.
+                HStack(spacing: 6) {
+                    BrandProgressView(size: 14)
+                        .controlSize(.mini)
+                    Text("Updating")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(.thinMaterial, in: Capsule())
+                .transition(.scale(scale: 0.8).combined(with: .opacity))
+                .accessibilityLabel("Updating trips")
             }
         }
         .padding(.top, 8)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isLoading)
     }
 
     // MARK: - Filters
@@ -1440,16 +1456,18 @@ struct TripsView: View {
 
     private var loadingCard: some View {
         VStack(spacing: 12) {
-            HStack {
-                BrandProgressView()
-                Text("Loading saved trips…")
+            HStack(spacing: 8) {
+                BrandProgressView(size: 16)
+                    .controlSize(.small)
+                Text("Loading trips from your vehicle…")
                     .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
                 Spacer()
             }
             .padding(.horizontal, 4)
 
-            ForEach(0..<3, id: \.self) { _ in
-                GBSkeletonCard()
+            ForEach(0..<4, id: \.self) { _ in
+                GBListRowSkeleton()
             }
         }
         .accessibilityElement(children: .combine)

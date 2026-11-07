@@ -55,6 +55,9 @@ struct MainView: View {
     @State private var appSettings = AppSettings.shared
     @State private var selectedVehicleIndex = 0
     @State private var isLoading = false
+    /// Which step of the first garage load is running (see
+    /// `EmptyVehiclesView.loadingStages`).
+    @State private var loadingStage = 0
     @State var lastError: APIError?
     @State private var showingSettings = false
     @State private var isAppLocked = false
@@ -99,6 +102,7 @@ struct MainView: View {
                     EmptyVehiclesView(
                         isLoading: $isLoading,
                         lastError: $lastError,
+                        loadingStage: loadingStage,
                         onRetry: {
                             await loadVehiclesForAllAccounts()
                         },
@@ -414,6 +418,7 @@ extension MainView {
     private func loadVehiclesForAllAccounts() async {
         await MainActor.run {
             isLoading = true
+            loadingStage = 0
             lastError = nil
         }
 
@@ -422,8 +427,11 @@ extension MainView {
 
         for account in accounts {
             do {
+                loadingStage = 0
                 try await account.initialize(modelContext: modelContext)
+                loadingStage = 1
                 try await account.loadVehicles(modelContext: modelContext)
+                loadingStage = 2
                 hasSuccessfulAccount = true
             } catch {
                 let user = account.username

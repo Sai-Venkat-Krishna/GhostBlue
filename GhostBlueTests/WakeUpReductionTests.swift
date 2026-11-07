@@ -93,17 +93,17 @@ final class WakeUpReductionTests: XCTestCase {
         let reads = StatusReadCounter(vin: vehicle.vin)
         defer { reads.stop() }
 
-        let commands = VehicleHeroCommandCenter()
-        commands.toggleCharge(for: vehicle, modelContext: context)
-        XCTAssertTrue(commands.isInFlight(.charge))
+        let tracker = RemoteCommands.tracker(.charge, for: vehicle)
+        RemoteCommands.toggleCharging(vehicle, modelContext: context)
+        XCTAssertTrue(tracker.isRunning)
 
         let deadline = Date().addingTimeInterval(30)
-        while commands.isInFlight(.charge), Date() < deadline {
+        while tracker.isRunning, Date() < deadline {
             try await Task.sleep(for: .milliseconds(100))
         }
 
-        XCTAssertFalse(commands.isInFlight(.charge))
-        XCTAssertNil(commands.errors[.charge])
+        XCTAssertFalse(tracker.isRunning)
+        XCTAssertNil(tracker.errorMessage)
         XCTAssertEqual(vehicle.evStatus?.charging, false)
         // Previously: an immediate read that still saw "charging", then the
         // verification poll. The commanded stop now confirms on the poll.

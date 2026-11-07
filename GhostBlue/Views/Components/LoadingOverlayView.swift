@@ -7,33 +7,38 @@
 
 import SwiftUI
 
+/// The sign-in overlay on Add Account: which step is running (signing in,
+/// then loading vehicles) instead of a bare spinner.
 struct LoadingOverlayView: View {
     let brandName: String
+    /// Index into `stages` of the running step.
+    var stage = 0
+
+    static let stages = ["Signing in", "Loading your vehicles"]
 
     var body: some View {
         ZStack {
-            // Semi-transparent background
             Color.black.opacity(0.3)
                 .ignoresSafeArea()
 
-            // Loading card
-            VStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 18) {
                 Text("Adding \(brandName) Account")
                     .font(.headline)
                     .fontWeight(.semibold)
                     .foregroundColor(.primary)
 
-                BrandProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: .blue))
-                    .scaleEffect(1.2)
+                GBStagedProgress(stages: Self.stages, current: stage)
             }
             .padding(24)
+            .frame(minWidth: 260, alignment: .leading)
             .background {
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(.regularMaterial)
-                    .shadow(color: .black.opacity(0.1), radius: 20, x: 0, y: 10)
+                    .shadow(color: .black.opacity(0.12), radius: 24, x: 0, y: 12)
             }
             .padding(.horizontal, 40)
+            .accessibilityElement(children: .contain)
+            .accessibilityAddTraits(.isModal)
         }
     }
 }

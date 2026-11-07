@@ -40,6 +40,7 @@ struct TripDetailsView: View {
                 tripListView
             }
         }
+        .animation(.easeInOut(duration: 0.3), value: isLoading)
         .navigationTitle("Trip History")
         .navigationBarTitleDisplayMode(.inline)
         .task {
@@ -49,11 +50,27 @@ struct TripDetailsView: View {
     }
 
     private var loadingView: some View {
-        VStack(spacing: 16) {
-            BrandProgressView()
-            Text("Loading trip details...")
-                .foregroundColor(.secondary)
+        ScrollView {
+            VStack(spacing: 12) {
+                HStack(spacing: 8) {
+                    BrandProgressView(size: 16)
+                        .controlSize(.small)
+                    Text("Loading trip details…")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                .padding(.horizontal, 4)
+
+                ForEach(0..<5, id: \.self) { _ in
+                    GBListRowSkeleton(thumbnail: 44)
+                }
+            }
+            .padding()
         }
+        .scrollDisabled(true)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Loading trip details")
     }
 
     private func errorView(_ error: ActionError) -> some View {

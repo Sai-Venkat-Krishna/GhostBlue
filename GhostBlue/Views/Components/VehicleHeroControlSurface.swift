@@ -8,208 +8,16 @@
 //  the same commands as LockButton / ClimateButton / ChargingButton.
 //
 //  Commands are slow round-trips, so a tapped region shows as in-flight
-//  and the drawn state keeps coming from the vehicle's own status. The
-//  hero never shows a state the vehicle has not confirmed.
+//  (its outline traces while the vehicle responds) and the drawn state
+//  keeps coming from the vehicle's own status. The hero never shows a
+//  state the vehicle has not confirmed. Commands run through the shared
+//  `RemoteCommands` trackers, so the hero and the cards below it show the
+//  same pending command.
 //
 
 import BetterBlueKit
 import SwiftData
 import SwiftUI
-#if canImport(UIKit)
-import UIKit
-#endif
-
-// MARK: - Command center
-
-/// Runs the hero's commands and tracks which region is waiting on the
-/// vehicle. Mirrors the command + `waitForStatusChange` sequence used by
-/// the standalone control buttons so both paths behave identically.
-@MainActor
-@Observable
-final class VehicleHeroCommandCenter {
-    enum Control: String, CaseIterable, Identifiable, Sendable {
-        case lock
-        case climate
-        case charge
-
-        var id: String { rawValue }
-
-        var pendingVerb: String {
-            switch self {
-            case .lock: "Lock"
-            case .climate: "Climate"
-            case .charge: "Charge"
-            }
-        }
-    }
-
-    private(set) var inFlight: Set<Control> = []
-    private(set) var statuses: [Control: String] = [:]
-    private(set) var errors: [Control: String] = [:]
-
-    private var tasks: [Control: Task<Void, Never>] = [:]
-
-    func isInFlight(_ control: Control) -> Bool { inFlight.contains(control) }
-
-    /// The one line of feedback shown under the render: the newest error
-    /// wins, otherwise whatever command is still waiting on the vehicle.
-    var feedback: (text: String, isError: Bool)? {
-        for control in Control.allCases {
-            if let error = errors[control] { return (error, true) }
-        }
-        for control in Control.allCases where inFlight.contains(control) {
-            let status = statuses[control] ?? ""
-            return (status.isEmpty ? "Sending command..." : status, false)
-        }
-        return nil
-    }
-
-    // MARK: Commands
-
-    func toggleLock(for vehicle: BBVehicle, modelContext: ModelContext) {
-        guard !cancelIfRunning(.lock) else { return }
-        let shouldLock = vehicle.lockStatus != .locked
-
-        run(.lock) { [weak self] in
-            guard let self else { return }
-            guard let account = vehicle.account else {
-                throw APIError(message: "Account not found for vehicle")
-            }
-
-            if shouldLock {
-                try await account.lockVehicle(vehicle, modelContext: modelContext)
-            } else {
-                try await account.unlockVehicle(vehicle, modelContext: modelContext)
-            }
-
-            let target: VehicleStatus.LockStatus = shouldLock ? .locked : .unlocked
-            try await vehicle.waitForStatusChange(
-                modelContext: modelContext,
-                condition: { $0.lockStatus == target },
-                statusMessageUpdater: { message in
-                    Task { @MainActor in self.statuses[.lock] = message }
-                }
-            )
-        }
-    }
-
-    func toggleClimate(
-        for vehicle: BBVehicle,
-        options: ClimateOptions?,
-        presetName: String?,
-        presetIcon: String?,
-        modelContext: ModelContext
-    ) {
-        guard !cancelIfRunning(.climate) else { return }
-        let shouldStart = !(vehicle.climateStatus?.airControlOn ?? false)
-
-        run(.climate) { [weak self] in
-            guard let self else { return }
-            guard let account = vehicle.account else {
-                throw APIError(message: "Account not found for vehicle")
-            }
-
-            if shouldStart {
-                try await account.startClimate(
-                    vehicle,
-                    options: options ?? ClimateOptions(),
-                    modelContext: modelContext,
-                    presetName: presetName,
-                    presetIcon: presetIcon
-                )
-            } else {
-                // No immediate read: it would wake the car only to see the
-                // old state. waitForStatusChange polls once it has settled.
-                try await account.stopClimate(vehicle, modelContext: modelContext)
-            }
-
-            try await vehicle.waitForStatusChange(
-                modelContext: modelContext,
-                condition: { $0.climateStatus.airControlOn == shouldStart },
-                statusMessageUpdater: { message in
-                    Task { @MainActor in self.statuses[.climate] = message }
-                }
-            )
-        }
-    }
-
-    func toggleCharge(for vehicle: BBVehicle, modelContext: ModelContext) {
-        guard !cancelIfRunning(.charge) else { return }
-        let shouldStart = !(vehicle.evStatus?.charging ?? false)
-
-        run(.charge) { [weak self] in
-            guard let self else { return }
-            guard let account = vehicle.account else {
-                throw APIError(message: "Account not found for vehicle")
-            }
-
-            if shouldStart {
-                try await account.startCharge(vehicle, modelContext: modelContext)
-            } else {
-                // No immediate read: it would wake the car only to see the
-                // old state. waitForStatusChange polls once it has settled.
-                try await account.stopCharge(vehicle, modelContext: modelContext)
-            }
-
-            try await vehicle.waitForStatusChange(
-                modelContext: modelContext,
-                condition: { $0.evStatus?.charging == shouldStart },
-                statusMessageUpdater: { message in
-                    Task { @MainActor in self.statuses[.charge] = message }
-                }
-            )
-        }
-    }
-
-    func cancelAll() {
-        for task in tasks.values { task.cancel() }
-        tasks.removeAll()
-        inFlight.removeAll()
-        statuses.removeAll()
-    }
-
-    // MARK: Plumbing
-
-    /// A second tap on a waiting region cancels it, matching the buttons.
-    private func cancelIfRunning(_ control: Control) -> Bool {
-        guard inFlight.contains(control) else { return false }
-        tasks[control]?.cancel()
-        return true
-    }
-
-    private func run(
-        _ control: Control,
-        operation: @escaping @MainActor () async throws -> Void
-    ) {
-        inFlight.insert(control)
-        statuses[control] = ""
-        errors[control] = nil
-
-        tasks[control] = Task { @MainActor in
-            defer {
-                inFlight.remove(control)
-                statuses[control] = nil
-                tasks[control] = nil
-            }
-
-            do {
-                try await operation()
-                #if canImport(UIKit)
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                #endif
-            } catch is CancellationError {
-                // Cancelled by a second tap — nothing to report.
-            } catch {
-                let message = (error as? APIError)?.message ?? error.localizedDescription
-                errors[control] = message
-                Task { @MainActor [weak self] in
-                    try? await Task.sleep(for: .seconds(4))
-                    self?.errors[control] = nil
-                }
-            }
-        }
-    }
-}
 
 // MARK: - Hero control surface
 
@@ -224,7 +32,6 @@ struct VehicleHeroControlSurface: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Query private var allClimatePresets: [ClimatePreset]
 
-    @State private var commands = VehicleHeroCommandCenter()
     @State private var renderSize: CGSize?
     @State private var showingClimateSettings = false
     @State private var showingChargeLimits = false
@@ -258,6 +65,23 @@ struct VehicleHeroControlSurface: View {
     private var hoodOpen: Bool { bbVehicle.hoodOpen == true }
     private var trunkOpen: Bool { bbVehicle.trunkOpen == true }
 
+    // MARK: Commands
+
+    private var lockTracker: RemoteCommandTracker { RemoteCommands.tracker(.lock, for: bbVehicle) }
+    private var climateTracker: RemoteCommandTracker { RemoteCommands.tracker(.climate, for: bbVehicle) }
+    private var chargeTracker: RemoteCommandTracker { RemoteCommands.tracker(.charge, for: bbVehicle) }
+
+    /// The one line of feedback shown under the render: the newest error
+    /// wins, otherwise whatever command is still waiting on the vehicle.
+    private var feedback: (text: String, isError: Bool)? {
+        let trackers = [lockTracker, climateTracker, chargeTracker]
+        if let error = trackers.lazy.compactMap(\.errorMessage).first { return (error, true) }
+        if let running = trackers.first(where: \.isRunning) {
+            return (running.statusText ?? "Sending command…", false)
+        }
+        return nil
+    }
+
     // MARK: Climate presets (same resolution order as ClimateButton)
 
     private var filteredPresets: [ClimatePreset] {
@@ -286,6 +110,7 @@ struct VehicleHeroControlSurface: View {
             .frame(maxWidth: .infinity, alignment: heroAlignment.alignment)
             .frame(height: heroSize.imageHeight)
             .shadow(color: heroGlow, radius: isCharging ? 28 : 18, y: 8)
+            .animation(.easeInOut(duration: 0.6), value: heroGlow)
             .overlay { controlOverlay }
 
             if isCharging {
@@ -297,7 +122,7 @@ struct VehicleHeroControlSurface: View {
         }
         .frame(maxWidth: .infinity)
         .overlay(alignment: .bottom) { feedbackStrip }
-        .onDisappear { commands.cancelAll() }
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: feedback?.text)
         .sheet(isPresented: $showingClimateSettings) {
             ClimateSettingsSheet(vehicle: bbVehicle)
         }
@@ -333,6 +158,7 @@ struct VehicleHeroControlSurface: View {
                         reduceMotion: reduceMotion
                     )
                     .heroAnchored(badge.position, in: rect, hitTarget: badgeDiameter)
+                    .transition(reduceMotion ? .opacity : .scale(scale: 0.4).combined(with: .opacity))
                     .accessibilityLabel(badge.label)
                 }
 
@@ -354,15 +180,18 @@ struct VehicleHeroControlSurface: View {
     // MARK: Regions
 
     private var lockRegion: some View {
-        HeroControlPuck(
-            systemImage: isLocked ? "lock.fill" : "lock.open.fill",
+        // While waiting, the glyph shows where the command is heading,
+        // greyed, so nothing unconfirmed is drawn as fact.
+        let showsLocked = lockTracker.isRunning ? lockTracker.tag == "lock" : isLocked
+        return HeroControlPuck(
+            systemImage: showsLocked ? "lock.fill" : "lock.open.fill",
             tint: isLocked ? .green : .orange,
             isLit: true,
-            inProgress: commands.isInFlight(.lock),
+            tracker: lockTracker,
             diameter: puckDiameter,
             reduceMotion: reduceMotion
         ) {
-            commands.toggleLock(for: bbVehicle, modelContext: modelContext)
+            RemoteCommands.toggleLock(bbVehicle, modelContext: modelContext)
         }
         .accessibilityLabel(isLocked ? "Locked" : "Unlocked")
         .accessibilityHint(isLocked ? "Double tap to unlock" : "Double tap to lock")
@@ -374,13 +203,13 @@ struct VehicleHeroControlSurface: View {
             systemImage: isClimateOn ? "fan" : "fan.slash",
             tint: isClimateOn ? .cyan : .secondary,
             isLit: isClimateOn,
-            inProgress: commands.isInFlight(.climate),
-            spinning: isClimateOn && !commands.isInFlight(.climate),
+            tracker: climateTracker,
+            spinning: isClimateOn && !climateTracker.isRunning,
             diameter: puckDiameter,
             reduceMotion: reduceMotion
         ) {
-            commands.toggleClimate(
-                for: bbVehicle,
+            RemoteCommands.toggleClimate(
+                bbVehicle,
                 options: effectivePreset?.climateOptions,
                 presetName: effectivePreset?.name,
                 presetIcon: effectivePreset?.iconName,
@@ -393,8 +222,9 @@ struct VehicleHeroControlSurface: View {
         .contextMenu {
             ForEach(filteredPresets) { preset in
                 Button {
-                    commands.toggleClimate(
-                        for: bbVehicle,
+                    RemoteCommands.setClimate(
+                        true,
+                        vehicle: bbVehicle,
                         options: preset.climateOptions,
                         presetName: preset.name,
                         presetIcon: preset.iconName,
@@ -418,12 +248,12 @@ struct VehicleHeroControlSurface: View {
             image: isCharging ? Image(systemName: "bolt.fill") : bbVehicle.plugIcon(for: evStatus?.plugType),
             tint: chargeTint,
             isLit: isPluggedIn || isCharging,
-            inProgress: commands.isInFlight(.charge),
-            pulsing: isCharging && !commands.isInFlight(.charge),
+            tracker: chargeTracker,
+            pulsing: isCharging && !chargeTracker.isRunning,
             diameter: puckDiameter,
             reduceMotion: reduceMotion
         ) {
-            commands.toggleCharge(for: bbVehicle, modelContext: modelContext)
+            RemoteCommands.toggleCharging(bbVehicle, modelContext: modelContext)
         }
         .disabled(!isPluggedIn && !isCharging)
         .opacity(!isPluggedIn && !isCharging ? 0.45 : 1)
@@ -507,7 +337,7 @@ struct VehicleHeroControlSurface: View {
 
     @ViewBuilder
     private var feedbackStrip: some View {
-        if let feedback = commands.feedback {
+        if let feedback {
             Text(feedback.text)
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(feedback.isError ? Color.red : Color.secondary)
@@ -516,7 +346,12 @@ struct VehicleHeroControlSurface: View {
                 .padding(.vertical, 5)
                 .background(.ultraThinMaterial, in: Capsule())
                 .overlay { Capsule().stroke(Color.white.opacity(0.12), lineWidth: 0.5) }
-                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                .contentTransition(.opacity)
+                .transition(
+                    reduceMotion
+                        ? .opacity
+                        : .opacity.combined(with: .move(edge: .bottom)).combined(with: .scale(scale: 0.9))
+                )
                 .allowsHitTesting(false)
                 .accessibilityLabel(feedback.text)
         }
@@ -601,23 +436,27 @@ private extension View {
 // MARK: - Puck
 
 /// A tappable region on the render: a glass puck carrying the live state
-/// of one control, with a pulsing ring while the vehicle is responding.
+/// of one control. While the vehicle is responding its outline traces
+/// (`commandProgressBorder`); it flashes on confirmation and turns red and
+/// shakes on failure.
 private struct HeroControlPuck: View {
     var image: Image
     let tint: Color
     let isLit: Bool
-    let inProgress: Bool
+    let tracker: RemoteCommandTracker
     var spinning: Bool = false
     var pulsing: Bool = false
     let diameter: CGFloat
     let reduceMotion: Bool
     let action: () -> Void
 
+    @State private var appSettings = AppSettings.shared
+
     init(
         systemImage: String,
         tint: Color,
         isLit: Bool,
-        inProgress: Bool,
+        tracker: RemoteCommandTracker,
         spinning: Bool = false,
         pulsing: Bool = false,
         diameter: CGFloat,
@@ -628,7 +467,7 @@ private struct HeroControlPuck: View {
             image: Image(systemName: systemImage),
             tint: tint,
             isLit: isLit,
-            inProgress: inProgress,
+            tracker: tracker,
             spinning: spinning,
             pulsing: pulsing,
             diameter: diameter,
@@ -641,7 +480,7 @@ private struct HeroControlPuck: View {
         image: Image,
         tint: Color,
         isLit: Bool,
-        inProgress: Bool,
+        tracker: RemoteCommandTracker,
         spinning: Bool = false,
         pulsing: Bool = false,
         diameter: CGFloat,
@@ -651,13 +490,15 @@ private struct HeroControlPuck: View {
         self.image = image
         self.tint = tint
         self.isLit = isLit
-        self.inProgress = inProgress
+        self.tracker = tracker
         self.spinning = spinning
         self.pulsing = pulsing
         self.diameter = diameter
         self.reduceMotion = reduceMotion
         self.action = action
     }
+
+    private var inProgress: Bool { tracker.isRunning }
 
     var body: some View {
         Button(action: action) {
@@ -675,26 +516,28 @@ private struct HeroControlPuck: View {
                     }
                     .shadow(color: isLit ? tint.opacity(0.45) : .black.opacity(0.3), radius: 6)
 
-                // Waiting on the vehicle: an arc sweeps around the puck and
-                // the glyph greys out, so no unconfirmed state is implied.
-                if inProgress {
-                    Circle()
-                        .trim(from: 0, to: 0.72)
-                        .stroke(
-                            tint.opacity(0.85),
-                            style: StrokeStyle(lineWidth: 2, lineCap: .round)
-                        )
-                        .padding(-4)
-                        .spin(true, duration: 0.9)
-                }
-
                 image
                     .font(.system(size: diameter * 0.44, weight: .semibold))
                     .foregroundStyle(inProgress ? Color.secondary : (isLit ? tint : Color.secondary))
+                    .contentTransition(.symbolEffect(.replace))
+                    .symbolEffect(.bounce, options: .nonRepeating, value: reduceMotion ? 0 : tracker.successCount)
                     .spin(spinning && !reduceMotion)
                     .pulse(pulsing && !reduceMotion)
             }
             .frame(width: diameter, height: diameter)
+            // Drawn just outside the puck so the glass ring stays visible.
+            .padding(4)
+            .commandProgressBorder(
+                tracker,
+                shape: .circle,
+                tint: appSettings.accentColor,
+                successTint: tint,
+                lineWidth: 2,
+                showsWash: false
+            )
+            .padding(-4)
+            .animation(.spring(response: 0.4, dampingFraction: 0.75), value: tint)
+            .animation(.spring(response: 0.4, dampingFraction: 0.75), value: inProgress)
         }
         .buttonStyle(.plain)
         .bouncePress()

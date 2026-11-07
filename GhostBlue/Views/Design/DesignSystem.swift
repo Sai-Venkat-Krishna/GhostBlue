@@ -112,53 +112,8 @@ private struct GBAccessibleCircleModifier: ViewModifier {
     }
 }
 
-struct GBSkeletonCard: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var shimmer = false
-    var height: CGFloat? = nil
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            skeletonLine(width: 0.45, height: 18)
-            skeletonLine(width: 0.82, height: 28)
-            HStack {
-                skeletonLine(width: 0.34, height: 13)
-                skeletonLine(width: 0.28, height: 13)
-            }
-        }
-        .padding(18)
-        .frame(minHeight: height)
-        .background {
-            LinearGradient(
-                colors: [
-                    Color.primary.opacity(0.06),
-                    Color.primary.opacity(shimmer ? 0.18 : 0.08),
-                    Color.primary.opacity(0.06)
-                ],
-                startPoint: shimmer ? .trailing : .leading,
-                endPoint: shimmer ? .leading : .trailing
-            )
-        }
-        .gbGlassCard()
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Loading content")
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
-                shimmer = true
-            }
-        }
-    }
-
-    private func skeletonLine(width: CGFloat, height: CGFloat) -> some View {
-        GeometryReader { geometry in
-            Capsule()
-                .fill(Color.primary.opacity(0.16))
-                .frame(width: geometry.size.width * width, height: height)
-        }
-        .frame(height: height)
-    }
-}
+// `GBSkeletonCard` and the other loading placeholders live in
+// LoadingSkeletons.swift.
 
 // MARK: - Background
 
@@ -277,6 +232,7 @@ struct GBStatTile<Icon: View>: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
                 .contentTransition(.numericText())
+                .animation(reduceMotion ? nil : .snappy, value: value)
 
             Text(label.uppercased())
                 .font(.gbStatLabel)
@@ -318,6 +274,7 @@ struct GBBatteryGauge: View {
     var targetPercentage: Double?
 
     @State private var sweepPhase = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var clamped: Double { min(max(percentage, 0), 100) }
 
@@ -339,7 +296,7 @@ struct GBBatteryGauge: View {
                     )
                     .frame(width: fillWidth)
                     .overlay(alignment: .leading) {
-                        if charging {
+                        if charging, !reduceMotion {
                             Capsule()
                                 .fill(
                                     LinearGradient(
@@ -357,7 +314,10 @@ struct GBBatteryGauge: View {
                         }
                     }
                     .clipShape(Capsule())
-                    .animation(.spring(response: 0.8, dampingFraction: 0.9), value: clamped)
+                    .animation(
+                        reduceMotion ? .easeInOut(duration: 0.25) : .spring(response: 0.8, dampingFraction: 0.9),
+                        value: clamped
+                    )
 
                 if let target = targetPercentage, target > 0, target < 100 {
                     Rectangle()
@@ -383,4 +343,39 @@ func gbBatteryColor(percentage: Double, charging: Bool) -> Color {
     if percentage <= 20 { return .red }
     if percentage <= 40 { return .orange }
     return .green
+}
+
+// MARK: - Sheet zoom
+
+private struct GBZoomTransitionModifier: ViewModifier {
+    let id: String
+    let namespace: Namespace.ID?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        if let namespace, !reduceMotion {
+            content.navigationTransition(.zoom(sourceID: id, in: namespace))
+        } else {
+            content
+        }
+    }
+}
+
+extension View {
+    /// Marks this view as where a sheet zooms out of (see `gbZoomTransition`).
+    @ViewBuilder
+    func gbZoomSource(_ id: String, in namespace: Namespace.ID?) -> some View {
+        if let namespace {
+            matchedTransitionSource(id: id, in: namespace)
+        } else {
+            self
+        }
+    }
+
+    /// Presents this sheet content by zooming out of the `gbZoomSource`
+    /// with the same id. Falls back to the standard sheet under Reduce
+    /// Motion or without a namespace.
+    func gbZoomTransition(from id: String, in namespace: Namespace.ID?) -> some View {
+        modifier(GBZoomTransitionModifier(id: id, namespace: namespace))
+    }
 }
