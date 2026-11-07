@@ -130,7 +130,7 @@ fun EnergyScreen(reselection: Int) {
                     IconButton(onClick = { addingSession = true }, modifier = Modifier.testTag("addSession")) {
                         Icon(Icons.Rounded.Add, contentDescription = "Add charging session manually")
                     }
-                    IconButton(onClick = { sheet = EnergySheet.COSTS }) {
+                    IconButton(onClick = { sheet = EnergySheet.COSTS }, modifier = Modifier.testTag("costsButton")) {
                         Icon(Icons.Rounded.Payments, contentDescription = "Charging price settings")
                     }
                     var menu by remember { mutableStateOf(false) }

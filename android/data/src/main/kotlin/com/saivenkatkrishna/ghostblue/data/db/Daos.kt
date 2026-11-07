@@ -149,6 +149,30 @@ interface RemoteCommandDao {
 
     @Query("SELECT * FROM remote_commands ORDER BY startedAt DESC LIMIT :limit")
     fun observeRecent(limit: Int): Flow<List<RemoteCommandActivity>>
+
+    /** Newest first, as iOS's Remote Activity list. */
+    @Query("SELECT * FROM remote_commands ORDER BY startedAt DESC")
+    fun observeAll(): Flow<List<RemoteCommandActivity>>
+
+    @Query("SELECT COUNT(*) FROM remote_commands")
+    suspend fun count(): Int
+
+    @Query("DELETE FROM remote_commands WHERE id IN (:ids)")
+    suspend fun delete(ids: List<UUID>)
+
+    @Query("DELETE FROM remote_commands WHERE startedAt < :before")
+    suspend fun deleteBefore(before: Instant): Int
+
+    /** All but the [keep] newest. */
+    @Query("DELETE FROM remote_commands WHERE id NOT IN (SELECT id FROM remote_commands ORDER BY startedAt DESC LIMIT :keep)")
+    suspend fun deleteAllButNewest(keep: Int): Int
+
+    /** Commands still "sending" from before [before]: the app stopped before they finished. */
+    @Query(
+        "UPDATE remote_commands SET stateRaw = 'failed', completedAt = :now, errorMessage = :message " +
+            "WHERE stateRaw = 'sending' AND startedAt < :before",
+    )
+    suspend fun failUnfinished(before: Instant, now: Instant, message: String): Int
 }
 
 @Dao
@@ -164,6 +188,9 @@ interface MaintenanceReminderDao {
 
     @Query("SELECT * FROM maintenance_reminders ORDER BY createdAt")
     fun observeAll(): Flow<List<MaintenanceReminder>>
+
+    @Query("SELECT * FROM maintenance_reminders WHERE id = :id")
+    suspend fun byId(id: UUID): MaintenanceReminder?
 
     @Query("SELECT * FROM maintenance_reminders WHERE vin = :vin ORDER BY createdAt")
     suspend fun forVin(vin: String): List<MaintenanceReminder>

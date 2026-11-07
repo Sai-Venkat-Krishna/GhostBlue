@@ -22,10 +22,14 @@ class WearMainActivity : ComponentActivity() {
     }
 
     private fun showVehicleFrom(intent: Intent?) {
-        intent?.getStringExtra(EXTRA_VIN)?.let { wearGraph.settings.setSelectedVin(it) }
+        val vin = intent?.getStringExtra(EXTRA_VIN) ?: return
+        wearGraph.settings.setSelectedVin(vin)
+        // The tile's Unlock on a watch with no screen lock: ask here first.
+        if (intent.getBooleanExtra(EXTRA_CONFIRM_UNLOCK, false)) wearGraph.unlockToConfirm.value = vin
     }
 
     companion object {
         const val EXTRA_VIN = "vin"
+        const val EXTRA_CONFIRM_UNLOCK = "confirmUnlock"
     }
 }

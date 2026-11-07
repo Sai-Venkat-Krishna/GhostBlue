@@ -46,6 +46,8 @@ import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.foundation.pager.HorizontalPager
 import androidx.wear.compose.foundation.pager.rememberPagerState
+import androidx.wear.compose.material3.AlertDialog
+import androidx.wear.compose.material3.AlertDialogDefaults
 import androidx.wear.compose.material3.AnimatedPage
 import androidx.wear.compose.material3.AppScaffold
 import androidx.wear.compose.material3.Button
@@ -139,8 +141,36 @@ fun WearApp(graph: WearGraph, remoteImages: Boolean = true) {
                 composable(Route.SIGN_IN) { SignInScreen(graph, onDone = { navController.popBackStack(Route.HOME, inclusive = false) }) }
                 composable(Route.HELP) { HelpScreen() }
             }
+            UnlockConfirmation(graph)
         }
     }
+}
+
+/**
+ * The tile's Unlock on a watch with no screen lock lands here rather than
+ * at the car: anyone wearing the watch could otherwise unlock it in one tap.
+ */
+@Composable
+private fun UnlockConfirmation(graph: WearGraph) {
+    val vin by graph.unlockToConfirm.collectAsStateWithLifecycle()
+    val vehicles by graph.model.vehicles.collectAsStateWithLifecycle()
+    val vehicle = vehicles?.firstOrNull { it.vin == vin }
+    AlertDialog(
+        visible = vehicle != null,
+        onDismissRequest = { graph.unlockToConfirm.value = null },
+        confirmButton = {
+            AlertDialogDefaults.ConfirmButton(
+                onClick = {
+                    graph.unlockToConfirm.value = null
+                    vehicle?.let { graph.model.send(it.vin, WatchControl.LOCK, RemoteAction.UNLOCK) }
+                },
+                modifier = Modifier.testTag("confirmUnlock"),
+            )
+        },
+        title = { Text("Unlock ${vehicle?.displayName ?: "car"}?") },
+        text = { Text("This watch has no screen lock, so anyone wearing it could unlock your car.") },
+        modifier = Modifier.testTag("unlockConfirmation"),
+    )
 }
 
 @Composable

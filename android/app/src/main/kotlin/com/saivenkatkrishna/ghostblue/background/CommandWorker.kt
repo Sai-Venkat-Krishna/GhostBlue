@@ -71,11 +71,16 @@ class CommandWorker(context: Context, params: WorkerParameters) : CoroutineWorke
             return Result.failure()
         }
 
+        // A shortcut's climate preset, if it named one (and it still exists for this car).
+        val preset = inputData.getString(KEY_PRESET_ID)?.let { id ->
+            graph.db.climatePresets().forVehicle(vehicle.id).firstOrNull { it.id.toString() == id }
+        }
+
         return try {
             setForegroundSafely(name, action)
             show("${action.progress}…", ongoing = true)
             graph.refreshWidgets()
-            controller.perform(vin, action, graph.commandWaitSeconds) { show(it, ongoing = true) }
+            controller.perform(vin, action, graph.commandWaitSeconds, preset) { show(it, ongoing = true) }
             finish(action.done)
             Result.success()
         } catch (error: CancellationException) {
@@ -132,15 +137,24 @@ class CommandWorker(context: Context, params: WorkerParameters) : CoroutineWorke
         const val KEY_VIN = "vin"
         const val KEY_ACTION = "action"
         const val KEY_ENQUEUED_AT = "enqueuedAt"
+        const val KEY_PRESET_ID = "presetId"
         private const val RESULT_TIMEOUT_MILLIS = 15_000L
         private const val EXPIRY_MILLIS = 2 * 60_000L
 
         /** One command per control of a car at a time, as in the app: Unlock replaces a waiting Lock, but not climate. */
         fun uniqueName(vin: String, action: RemoteAction) = "command-$vin-${action.control}"
 
-        fun enqueue(context: Context, vin: String, action: RemoteAction) {
+        /** [presetId] picks the climate preset for Start climate; without it the car's selected one is used. */
+        fun enqueue(context: Context, vin: String, action: RemoteAction, presetId: String? = null) {
             val request = OneTimeWorkRequestBuilder<CommandWorker>()
-                .setInputData(workDataOf(KEY_VIN to vin, KEY_ACTION to action.name, KEY_ENQUEUED_AT to System.currentTimeMillis()))
+                .setInputData(
+                    workDataOf(
+                        KEY_VIN to vin,
+                        KEY_ACTION to action.name,
+                        KEY_ENQUEUED_AT to System.currentTimeMillis(),
+                        KEY_PRESET_ID to presetId,
+                    ),
+                )
                 .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .addTag(TAG)
                 .build()

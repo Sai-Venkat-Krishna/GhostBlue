@@ -37,6 +37,8 @@ class AppFlowsTest {
     @Test fun signingInWithTheTestAccountOpensTheGarage() {
         val graph = testGraph()
         compose.setApp(graph)
+        // The welcome screen comes after the database answers; tapping before it's settled can miss.
+        compose.waitForTag("connectButton")
         compose.onNodeWithTag("connectButton").performClick()
         compose.onNodeWithTag("usernameField").performTextInput(TEST_USERNAME)
         compose.onNodeWithTag("passwordField").performTextInput(TEST_PASSWORD)

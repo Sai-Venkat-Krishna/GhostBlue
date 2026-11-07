@@ -9,4 +9,13 @@
     <string name="tile_lock">Lock</string>
     <string name="tile_climate">Climate</string>
     <string name="tile_charge">Charging</string>
+    <string name="shortcut_lock_short">Lock</string>
+    <string name="shortcut_lock_long">Lock car</string>
+    <string name="shortcut_unlock_short">Unlock</string>
+    <string name="shortcut_unlock_long">Unlock car</string>
+    <string name="shortcut_climate_short">Start climate</string>
+    <string name="shortcut_climate_long">Start climate</string>
+    <string name="shortcut_refresh_short">Refresh</string>
+    <string name="shortcut_refresh_long">Refresh car status</string>
+    <string name="shortcut_disabled">Sign in to GhostBlue first</string>
 </resources>

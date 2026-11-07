@@ -6,6 +6,7 @@ import android.util.Log
 import com.saivenkatkrishna.ghostblue.data.account.AccountAlerts
 import com.saivenkatkrishna.ghostblue.data.account.AccountControllers
 import com.saivenkatkrishna.ghostblue.data.account.HTTPLogSinkManager
+import com.saivenkatkrishna.ghostblue.data.account.RemoteCommandLog
 import com.saivenkatkrishna.ghostblue.data.db.GhostBlueDatabase
 import com.saivenkatkrishna.ghostblue.data.model.DeviceType
 import com.saivenkatkrishna.ghostblue.kit.logging.BBLogCategory
@@ -21,6 +22,11 @@ import com.saivenkatkrishna.ghostblue.data.vehicle.VehicleAlerts
 import com.saivenkatkrishna.ghostblue.data.vehicle.VehicleStatusEvents
 import com.saivenkatkrishna.ghostblue.notifications.ChargingProgress
 import com.saivenkatkrishna.ghostblue.notifications.Notifier
+import com.saivenkatkrishna.ghostblue.security.AppLock
+import com.saivenkatkrishna.ghostblue.shortcuts.AppShortcuts
+import com.saivenkatkrishna.ghostblue.security.BiometricAuthenticator
+import com.saivenkatkrishna.ghostblue.security.DeviceAuthenticator
+import androidx.lifecycle.ProcessLifecycleOwner
 import com.saivenkatkrishna.ghostblue.ui.GarageModel
 import com.saivenkatkrishna.ghostblue.watch.WatchHandoff
 import com.saivenkatkrishna.ghostblue.widgets.ChargeDialWidget
@@ -29,7 +35,10 @@ import com.saivenkatkrishna.ghostblue.widgets.VehicleWidget
 import com.saivenkatkrishna.ghostblue.widgets.WovenWidget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
@@ -52,12 +61,15 @@ class AppGraph(
     deviceType: DeviceType = DeviceType.PHONE,
     /** Seconds the command checks wait between reads; tests shorten it. */
     val commandWaitSeconds: Int = 10,
+    /** Fingerprint, face or screen lock for the app lock; tests use a fake. */
+    authenticator: DeviceAuthenticator = BiometricAuthenticator,
 ) {
     val logSinks = HTTPLogSinkManager(db, scope, deviceType, isEnabled = { settings.debugMode.value })
     val controllers = AccountControllers(db, scope, logSinks, sourceName = deviceType.displayName)
     val garage = GarageModel(db, settings, controllers, scope, commandWaitSeconds)
     val notifier = Notifier(context, settings)
     val chargingProgress = ChargingProgress(notifier, settings, db)
+    val appLock = AppLock(settings, authenticator)
 
     /** Redraws the widgets and asks the tiles to re-read the car. */
     suspend fun refreshWidgets() {
@@ -81,11 +93,12 @@ class AppGraph(
      * widgets and tiles following every status, and the scheduled refreshes,
      * smart-charging runs and reminders.
      */
-    @OptIn(FlowPreview::class)
+    @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
     fun startBackgroundWork() {
         notifier.createChannels()
         VehicleAlerts.sink = notifier
         AccountAlerts.sink = notifier
+        scope.launch { RemoteCommandLog.prune(db) }
         WatchHandoff.start(context, db, scope)
         scope.launch {
             VehicleStatusEvents.statusUpdated.collect { vin -> chargingProgress.update(vin) }
@@ -102,6 +115,16 @@ class AppGraph(
                 db.vehicles().observeAll().map { list -> list.map { listOf(it.vin, it.isHidden, it.displayName, it.vehicleImageColor) } },
             ) { selected, unit, theme, cars -> listOf(selected, unit, theme, cars) }
                 .distinctUntilChanged().drop(1).debounce(500).collect { refreshWidgets() }
+        }
+        scope.launch {
+            // The launcher's dynamic shortcuts follow the selected car, its name and presets.
+            garage.selectedVehicle
+                .distinctUntilChanged { a, b -> a?.vin == b?.vin && a?.displayName == b?.displayName && (a?.evStatus == null) == (b?.evStatus == null) }
+                .flatMapLatest { vehicle ->
+                    if (vehicle == null) flowOf(emptyList())
+                    else db.climatePresets().observeForVehicle(vehicle.id).map { AppShortcuts.dynamicFor(vehicle, it) }
+                }
+                .distinctUntilChanged().debounce(1_000).collect { AppShortcuts.publish(context, it) }
         }
         scope.launch {
             // Settings and car changes that move a schedule: the owner's interval, smart charging, reminders.
@@ -137,6 +160,8 @@ open class GhostBlueApplication : Application() {
         super.onCreate()
         BBLogger.sink = LogcatSink
         graph = createGraph()
+        // The app lock follows the whole app in and out of the foreground, not one activity.
+        ProcessLifecycleOwner.get().lifecycle.addObserver(graph.appLock.processObserver)
         startBackgroundWork()
     }
 

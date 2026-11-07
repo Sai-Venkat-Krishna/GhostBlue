@@ -18,7 +18,15 @@ import com.saivenkatkrishna.ghostblue.widgets.WovenWidgetReceiver
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.material.icons.rounded.Build
+import androidx.compose.material.icons.rounded.Fingerprint
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.SmartToy
+import kotlinx.coroutines.flow.map
+import androidx.compose.material.icons.rounded.Timer
+import com.saivenkatkrishna.ghostblue.settings.AppLockTimeout
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.rounded.Alarm
 import androidx.compose.material.icons.rounded.Bedtime
@@ -130,6 +138,10 @@ sealed interface SettingsRoute {
     data class HttpLog(val id: UUID) : SettingsRoute
     data object About : SettingsRoute
 
+    /** One car's command log ([vin]), or every car's. */
+    data class RemoteActivity(val vin: String?) : SettingsRoute
+    data class Maintenance(val vin: String) : SettingsRoute
+
     /** How the route is saved across rotating, folding and process death. */
     val key: String
         get() = when (this) {
@@ -141,6 +153,8 @@ sealed interface SettingsRoute {
             HttpLogs -> "httpLogs"
             is HttpLog -> "httpLog:$id"
             About -> "about"
+            is RemoteActivity -> "remoteActivity:${vin.orEmpty()}"
+            is Maintenance -> "maintenance:$vin"
         }
 
     companion object {
@@ -155,6 +169,8 @@ sealed interface SettingsRoute {
                 "httpLogs" -> HttpLogs
                 "httpLog" -> runCatching { HttpLog(UUID.fromString(value)) }.getOrNull()
                 "about" -> About
+                "remoteActivity" -> RemoteActivity(value.ifEmpty { null })
+                "maintenance" -> Maintenance(value)
                 else -> null
             }
         }
@@ -184,11 +200,13 @@ fun SettingsTab(incomingBackup: MutableStateFlow<Uri?>) {
             entry<SettingsRoute.Root> { SettingsRoot(onOpen = { stack += it }) }
             entry<SettingsRoute.AddAccount> { SignInScreen(onBack = { back() }, onDone = { back() }) }
             entry<SettingsRoute.Account> { route -> AccountScreen(route.id, onBack = { back() }) }
-            entry<SettingsRoute.Vehicle> { route -> VehicleScreen(route.vin, onBack = { back() }) }
+            entry<SettingsRoute.Vehicle> { route -> VehicleScreen(route.vin, onBack = { back() }, onOpen = { stack += it }) }
             entry<SettingsRoute.Backup> { BackupScreen(incomingBackup, onBack = { back() }) }
             entry<SettingsRoute.HttpLogs> { HttpLogsScreen(onBack = { back() }, onOpen = { stack += SettingsRoute.HttpLog(it) }) }
             entry<SettingsRoute.HttpLog> { route -> HttpLogDetailScreen(route.id, onBack = { back() }) }
             entry<SettingsRoute.About> { AboutScreen(onBack = { back() }) }
+            entry<SettingsRoute.RemoteActivity> { route -> RemoteActivityScreen(route.vin, onBack = { back() }) }
+            entry<SettingsRoute.Maintenance> { route -> MaintenanceScreen(route.vin, onBack = { back() }) }
         },
     )
 }
@@ -208,6 +226,9 @@ private fun SettingsRoot(onOpen: (SettingsRoute) -> Unit) {
     val debugMode by settings.debugMode.collectAsStateWithLifecycle()
     val hideLocation by settings.hideVehicleLocation.collectAsStateWithLifecycle()
     val redact by settings.redactPrivateLocations.collectAsStateWithLifecycle()
+    val appLockOn by settings.requireAppLock.collectAsStateWithLifecycle()
+    val appLockTimeout by settings.appLockTimeout.collectAsStateWithLifecycle()
+    val activity = LocalActivity.current
     var confirmClear by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -256,8 +277,25 @@ private fun SettingsRoot(onOpen: (SettingsRoute) -> Unit) {
                     Footer("How often the app refreshes the selected vehicle while it's open.")
 
                     Section("Privacy")
+                    SwitchListRow(
+                        "App lock",
+                        "Fingerprint, face or screen lock to open GhostBlue",
+                        appLockOn,
+                        onChange = { on -> graph.appLock.setEnabled(activity, on) { garage.post(it) } },
+                        icon = Icons.Rounded.Fingerprint,
+                        tag = "appLockSwitch",
+                    )
+                    if (appLockOn) {
+                        MenuRow("Lock", appLockTimeout.displayName, Icons.Rounded.Timer, AppLockTimeout.entries, { it.displayName }, settings::setAppLockTimeout)
+                    }
+                    Footer("GhostBlue locks when you leave it. Android asks for your fingerprint, face or screen lock; GhostBlue never sees them. Widgets, tiles and shortcuts still work.")
                     SwitchListRow("Hide exact vehicle location", null, hideLocation, settings::setHideVehicleLocation, icon = Icons.Rounded.VisibilityOff)
                     SwitchListRow("Redact private locations in exports", null, redact, settings::setRedactPrivateLocations)
+                    NavRow("Remote activity", "Every command sent to your cars", Icons.Rounded.History, tag = "remoteActivityRow") {
+                        onOpen(SettingsRoute.RemoteActivity(null))
+                    }
+
+                    ShortcutSettings()
 
                     Section("Data")
                     NavRow("Backup & Restore", "Move everything to another phone or an iPhone", Icons.Rounded.Backup, tag = "backupRow") { onOpen(SettingsRoute.Backup) }
@@ -335,14 +373,21 @@ private fun NavRow(title: String, subtitle: String?, icon: ImageVector, tag: Str
 }
 
 @Composable
-private fun SwitchListRow(title: String, subtitle: String?, checked: Boolean, onChange: (Boolean) -> Unit, icon: ImageVector? = null) {
+private fun SwitchListRow(
+    title: String,
+    subtitle: String?,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+    icon: ImageVector? = null,
+    tag: String? = null,
+) {
     ListItem(
         headlineContent = { Text(title) },
         supportingContent = subtitle?.let { { Text(it) } },
         leadingContent = icon?.let { { Icon(it, contentDescription = null) } },
         trailingContent = { Switch(checked = checked, onCheckedChange = onChange) },
         colors = transparentListColors(),
-        modifier = Modifier.clickable { onChange(!checked) },
+        modifier = Modifier.clickable { onChange(!checked) }.let { if (tag != null) it.testTag(tag) else it },
     )
 }
 
@@ -404,7 +449,13 @@ private fun <T> MenuRow(title: String, value: String, icon: ImageVector, options
 
 /** A screen under Settings: a small app bar with a back arrow. */
 @Composable
-fun SubScreen(title: String, onBack: () -> Unit, actions: @Composable () -> Unit = {}, content: @Composable (PaddingValues) -> Unit) {
+fun SubScreen(
+    title: String,
+    onBack: () -> Unit,
+    actions: @Composable () -> Unit = {},
+    floatingActionButton: @Composable () -> Unit = {},
+    content: @Composable (PaddingValues) -> Unit,
+) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -413,6 +464,7 @@ fun SubScreen(title: String, onBack: () -> Unit, actions: @Composable () -> Unit
                 actions = { actions() },
             )
         },
+        floatingActionButton = floatingActionButton,
         content = content,
     )
 }
@@ -506,12 +558,25 @@ private fun AccountScreen(id: UUID, onBack: () -> Unit) {
 }
 
 @Composable
-private fun VehicleScreen(vin: String, onBack: () -> Unit) {
-    val garage = LocalAppGraph.current.garage
+private fun VehicleScreen(vin: String, onBack: () -> Unit, onOpen: (SettingsRoute) -> Unit) {
+    val graph = LocalAppGraph.current
+    val garage = graph.garage
     val vehicles by garage.allVehicles.collectAsStateWithLifecycle()
+    val openReminders by remember(vin) {
+        graph.db.maintenanceReminders().observeAll().map { list -> list.count { it.vin == vin && !it.isCompleted } }
+    }.collectAsStateWithLifecycle(0)
     val vehicle = vehicles?.firstOrNull { it.vin == vin } ?: return
     SubScreen(vehicle.displayName, onBack) { padding ->
         Column(Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
+            NavRow(
+                "Maintenance",
+                if (openReminders == 0) "Service reminders by date or odometer" else "$openReminders open",
+                Icons.Rounded.Build,
+                tag = "maintenanceRow",
+            ) { onOpen(SettingsRoute.Maintenance(vin)) }
+            NavRow("Remote activity", "Commands sent to this car", Icons.Rounded.History, tag = "vehicleActivityRow") {
+                onOpen(SettingsRoute.RemoteActivity(vin))
+            }
             VehicleSettingsContent(vehicle)
             VehicleAlertSettings(vehicle)
         }
@@ -542,6 +607,45 @@ private fun AboutScreen(onBack: () -> Unit) {
             )
             Footer("GhostBlue for Android, built with Jetpack Compose and Material 3 Expressive. Not affiliated with Hyundai or Kia.")
         }
+    }
+}
+
+/**
+ * iOS's App Shortcuts and Siri intents, as Android has them: launcher
+ * shortcuts always, and a command intent for Assistant, Routines and
+ * automation apps once the owner allows it.
+ */
+@Composable
+private fun ShortcutSettings() {
+    val settings = LocalAppGraph.current.settings
+    val allowed by settings.allowAutomation.collectAsStateWithLifecycle()
+    var showHow by remember { mutableStateOf(false) }
+    Section("Shortcuts & automation")
+    SwitchListRow(
+        "Assistant and automation apps",
+        "Let Google Assistant, Routines and apps like Tasker send commands",
+        allowed,
+        settings::setAllowAutomation,
+        icon = Icons.Rounded.SmartToy,
+        tag = "automationSwitch",
+    )
+    NavRow("How to use them", "Launcher shortcuts and the command intent", Icons.Rounded.Info, tag = "shortcutHelp") { showHow = true }
+    Footer("Touch and hold the GhostBlue icon for Lock, Unlock and climate. Unlock always needs your phone unlocked.")
+    if (showHow) {
+        AlertDialog(
+            onDismissRequest = { showHow = false },
+            title = { Text("Shortcuts & automation") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Touch and hold the GhostBlue icon for the selected car's Lock, Unlock, Start climate and Stop climate. Refresh, charging and each climate preset are in the launcher's shortcut list; drag one to the home screen to keep it.")
+                    Text("Automation apps start the activity with the action com.saivenkatkrishna.ghostblue.action.COMMAND and a \"command\" extra:")
+                    Text("lock · unlock · start_climate · stop_climate · start_charge · stop_charge · refresh · smart_charging", style = MaterialTheme.typography.bodySmall)
+                    Text("Optional extras: \"vehicle\" (a car's name or VIN; otherwise the selected car) and \"preset\" (a climate preset's name, for start_climate).")
+                    Text("Commands wait for the car and show their progress in a notification, as widget commands do. They're recorded under Remote activity.")
+                }
+            },
+            confirmButton = { TextButton(onClick = { showHow = false }) { Text("Done") } },
+        )
     }
 }
 

@@ -1,5 +1,6 @@
 package com.saivenkatkrishna.ghostblue
 
+import android.app.Activity
 import android.content.Context
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.SemanticsNodeInteractionsProvider
@@ -11,6 +12,9 @@ import com.saivenkatkrishna.ghostblue.data.db.GhostBlueDatabase
 import com.saivenkatkrishna.ghostblue.kit.api.fake.FakeVehicleSeeds
 import com.saivenkatkrishna.ghostblue.kit.model.Brand
 import com.saivenkatkrishna.ghostblue.kit.model.Region
+import com.saivenkatkrishna.ghostblue.security.AuthAvailability
+import com.saivenkatkrishna.ghostblue.security.AuthResult
+import com.saivenkatkrishna.ghostblue.security.DeviceAuthenticator
 import com.saivenkatkrishna.ghostblue.settings.AppSettings
 import com.saivenkatkrishna.ghostblue.ui.GhostBlueApp
 import com.saivenkatkrishna.ghostblue.ui.PlaceholderMapContent
@@ -21,10 +25,31 @@ const val TEST_USERNAME = "testaccount@betterblue.com"
 const val TEST_PASSWORD = "betterblue"
 
 /** A fresh app: an in-memory database, its own settings, and command checks that don't wait unless asked to. */
-fun testGraph(commandWaitSeconds: Int = 0): AppGraph {
+fun testGraph(
+    authenticator: DeviceAuthenticator = FakeAuthenticator(),
+    commandWaitSeconds: Int = 0,
+    settings: (AppSettings) -> Unit = {},
+): AppGraph {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val prefs = context.getSharedPreferences("test-${UUID.randomUUID()}", Context.MODE_PRIVATE)
-    return AppGraph(context, GhostBlueDatabase.inMemory(context), AppSettings(prefs), commandWaitSeconds = commandWaitSeconds)
+    val appSettings = AppSettings(prefs).apply(settings)
+    return AppGraph(context, GhostBlueDatabase.inMemory(context), appSettings, commandWaitSeconds = commandWaitSeconds, authenticator = authenticator)
+}
+
+/** Android's fingerprint, face and screen-lock prompt, answering as told and counting how often it was shown. */
+class FakeAuthenticator(
+    var availability: AuthAvailability = AuthAvailability.Available,
+    var result: AuthResult = AuthResult.Success,
+) : DeviceAuthenticator {
+    var prompts = 0
+        private set
+
+    override fun availability(context: Context): AuthAvailability = availability
+
+    override fun authenticate(activity: Activity, title: String, subtitle: String, onResult: (AuthResult) -> Unit) {
+        prompts++
+        onResult(result)
+    }
 }
 
 /** Signs in as the test account (three test cars) without going through the screens. */

@@ -27,6 +27,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -65,6 +66,8 @@ import com.saivenkatkrishna.ghostblue.data.model.ChargingLocationType
 import com.saivenkatkrishna.ghostblue.ui.LocalAppGraph
 import com.saivenkatkrishna.ghostblue.ui.components.Format
 import com.saivenkatkrishna.ghostblue.ui.components.LabeledRow
+import com.saivenkatkrishna.ghostblue.ui.components.SectionCard
+import com.saivenkatkrishna.ghostblue.ui.components.StatTile
 import com.saivenkatkrishna.ghostblue.ui.home.SwitchRow
 import com.saivenkatkrishna.ghostblue.ui.home.rememberNow
 import com.saivenkatkrishna.ghostblue.ui.theme.LocalGhostBlueColors
@@ -73,6 +76,8 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import kotlinx.coroutines.launch
 
 /** Adding or correcting a charging session, as iOS's session editor. */
@@ -278,24 +283,35 @@ private fun DateTimeField(label: String, value: Instant, onChange: (Instant) -> 
     }
 }
 
-/** Battery capacity and prices, as iOS's Charging Costs. Each edit saves at once; zero or less clears. */
+/**
+ * Battery capacity, this month's spending against the budget, and the
+ * tariff, as iOS's Charging Costs and the tariff section of its Charging
+ * Intelligence. Each edit saves at once; zero or less clears.
+ */
 @Composable
 fun CostSettingsSheet(vehicle: BBVehicle, onDismiss: () -> Unit) {
     val garage = LocalAppGraph.current.garage
     fun text(value: Double?, digits: Int) = value?.let { Format.decimals(it, digits).replace(',', '.') } ?: ""
     var capacity by remember(vehicle.vin) { mutableStateOf(text(vehicle.batteryCapacityKWh, 1)) }
     var offPeak by remember(vehicle.vin) { mutableStateOf(text(vehicle.offPeakElectricityRatePerKWh, 3)) }
+    var peak by remember(vehicle.vin) { mutableStateOf(text(vehicle.peakElectricityRatePerKWh, 3)) }
     var dcFast by remember(vehicle.vin) { mutableStateOf(text(vehicle.dcFastChargingRatePerKWh, 3)) }
     var other by remember(vehicle.vin) { mutableStateOf(text(vehicle.electricityRatePerKWh, 3)) }
+    var budget by remember(vehicle.vin) { mutableStateOf(text(vehicle.monthlyChargingBudget, 2)) }
     fun positive(text: String) = Format.parseDecimal(text)?.takeIf { it > 0 }
     val default = BatteryCapacityCatalog.defaultCapacityKWh(vehicle.model, vehicle.fuelType)
+    val sessions by remember(vehicle.vin) { garage.sessions(vehicle.vin) }.collectAsStateWithLifecycle(emptyList())
+    val now = rememberNow()
+    val month = ChargingMonth.of(vehicle, sessions, now)
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(
-            Modifier.verticalScroll(rememberScrollState()).imePadding().padding(horizontal = 24.dp).padding(bottom = 32.dp),
+            Modifier.verticalScroll(rememberScrollState()).imePadding().padding(horizontal = 24.dp).padding(bottom = 32.dp).testTag("costSheet"),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text("Charging Costs", style = MaterialTheme.typography.titleLarge)
+            MonthSummary(month)
+
             SectionTitle("Battery")
             DecimalField("Usable capacity", capacity, "kWh", default?.let { Format.upToOneDecimal(it) } ?: "Not set", Modifier.testTag("capacityField")) {
                 capacity = it
@@ -316,10 +332,15 @@ fun CostSettingsSheet(vehicle: BBVehicle, onDismiss: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            SectionTitle("Charging prices")
-            DecimalField("Home super off-peak / kWh", offPeak, Format.currencyCode(), "Not set") {
+
+            SectionTitle("Tariff")
+            DecimalField("Home super off-peak / kWh", offPeak, Format.currencyCode(), "Not set", Modifier.testTag("offPeakRateField")) {
                 offPeak = it
                 garage.editVehicle(vehicle.vin) { row -> row.offPeakElectricityRatePerKWh = positive(it) }
+            }
+            DecimalField("Home on-peak (4–9 PM) / kWh", peak, Format.currencyCode(), "Not set", Modifier.testTag("peakRateField")) {
+                peak = it
+                garage.editVehicle(vehicle.vin) { row -> row.peakElectricityRatePerKWh = positive(it) }
             }
             DecimalField("DC fast default / kWh", dcFast, Format.currencyCode(), "Not set") {
                 dcFast = it
@@ -329,12 +350,86 @@ fun CostSettingsSheet(vehicle: BBVehicle, onDismiss: () -> Unit) {
                 other = it
                 garage.editVehicle(vehicle.vin) { row -> row.electricityRatePerKWh = positive(it) }
             }
+            HourStepper("Off-peak starts", vehicle.offPeakStartHour, "offPeakStart") { hour -> garage.editVehicle(vehicle.vin) { it.offPeakStartHour = hour } }
+            HourStepper("Off-peak ends", vehicle.offPeakEndHour, "offPeakEnd") { hour -> garage.editVehicle(vehicle.vin) { it.offPeakEndHour = hour } }
             Text(
-                "New sessions copy the rate for where they happen; editing a price later doesn't change past sessions. " +
-                    "Home charging during the super off-peak window uses that rate.",
+                if (vehicle.smartChargingEnabled) {
+                    "With SDG&E smart charging on, home sessions follow SDG&E's super off-peak schedule; these hours apply when it's off."
+                } else {
+                    "Home charging between these hours uses the super off-peak rate."
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            DecimalField("Monthly budget", budget, Format.currencyCode(), "Not set", Modifier.testTag("budgetField")) {
+                budget = it
+                garage.editVehicle(vehicle.vin) { row -> row.monthlyChargingBudget = positive(it) }
+            }
+            Text(
+                "New home sessions save the tariff and split estimated costs across time periods. SDG&E on-peak is 4–9 PM. " +
+                    "If no on-peak rate is set, the other-charging rate is used. DC sessions use the DC default. " +
+                    "Receipt totals override estimates; editing a price later doesn't change past sessions.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** Month to date, the projection, energy, and the budget as a wavy bar that turns red when it's spent. */
+@Composable
+private fun MonthSummary(month: ChargingMonth) {
+    val colors = LocalGhostBlueColors.current
+    SectionCard(Modifier.testTag("chargingMonth"), containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
+        Text("This month", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            StatTile("Spent", Format.currency(month.cost), Modifier.weight(1f).testTag("monthCost"), accent = colors.energy)
+            StatTile("Projected", Format.currency(month.projectedCost), Modifier.weight(1f).testTag("monthProjected"))
+            StatTile("Energy", Format.kWh(month.energyKWh), Modifier.weight(1f))
+        }
+        val fraction = month.budgetFraction
+        val budget = month.budget
+        if (fraction != null && budget != null) {
+            val barColor = if (month.isOverBudget) MaterialTheme.colorScheme.error else colors.energy
+            LinearWavyProgressIndicator(
+                progress = { fraction.toFloat() },
+                color = barColor,
+                modifier = Modifier.fillMaxWidth().testTag("budgetProgress"),
+            )
+            LabeledRow("Monthly budget", "${Format.currency(month.cost)} of ${Format.currency(budget)}", valueColor = barColor)
+            when {
+                month.isOverBudget -> Text(
+                    "Over budget by ${Format.currency(month.cost - budget)}.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                month.isOnPaceToExceed -> Text(
+                    "At this pace the month ends ${Format.currency(month.projectedCost - budget)} over budget.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.service,
+                )
+            }
+        }
+    }
+}
+
+/** An hour of the day with minus and plus buttons, shown in the locale's clock. */
+@Composable
+private fun HourStepper(label: String, hour: Int, tag: String, onChange: (Int) -> Unit) {
+    val text = LocalTime.of(hour.coerceIn(0, 23), 0).format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("$label $text", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f).testTag(tag))
+        FilledTonalIconButton(onClick = { onChange((hour - 1).coerceAtLeast(0)) }, enabled = hour > 0, shapes = IconButtonDefaults.shapes()) {
+            Icon(Icons.Rounded.Remove, contentDescription = "Earlier")
+        }
+        Spacer(Modifier.width(8.dp))
+        FilledTonalIconButton(
+            onClick = { onChange((hour + 1).coerceAtMost(23)) },
+            enabled = hour < 23,
+            shapes = IconButtonDefaults.shapes(),
+            modifier = Modifier.testTag("${tag}Later"),
+        ) {
+            Icon(Icons.Rounded.Add, contentDescription = "Later")
         }
     }
 }

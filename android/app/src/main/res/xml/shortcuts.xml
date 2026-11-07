@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Launcher shortcuts for the selected car, as iOS's App Shortcuts. They open
+    ShortcutActivity, which isn't exported: only the launcher (acting for
+    GhostBlue) can start it. The capability lets Google Assistant say "open
+    Lock in GhostBlue"; it goes through the exported command intent, which the
+    owner allows in Settings. The app adds dynamic ones for the car's presets
+    and charging (AppShortcuts).
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <capability android:name="actions.intent.OPEN_APP_FEATURE">
+        <intent
+            android:action="com.saivenkatkrishna.ghostblue.action.COMMAND"
+            android:targetPackage="com.saivenkatkrishna.ghostblue"
+            android:targetClass="com.saivenkatkrishna.ghostblue.shortcuts.AutomationCommandActivity">
+            <parameter
+                android:name="feature"
+                android:key="command" />
+        </intent>
+    </capability>
+    <shortcut
+        android:shortcutId="lock"
+        android:enabled="true"
+        android:icon="@drawable/shortcut_lock"
+        android:shortcutShortLabel="@string/shortcut_lock_short"
+        android:shortcutLongLabel="@string/shortcut_lock_long"
+        android:shortcutDisabledMessage="@string/shortcut_disabled">
+        <intent
+            android:action="com.saivenkatkrishna.ghostblue.action.SHORTCUT"
+            android:targetPackage="com.saivenkatkrishna.ghostblue"
+            android:targetClass="com.saivenkatkrishna.ghostblue.shortcuts.ShortcutActivity">
+            <extra android:name="command" android:value="lock" />
+        </intent>
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <parameter-binding android:key="feature" android:value="lock" />
+        </capability-binding>
+    </shortcut>
+    <shortcut
+        android:shortcutId="unlock"
+        android:enabled="true"
+        android:icon="@drawable/shortcut_unlock"
+        android:shortcutShortLabel="@string/shortcut_unlock_short"
+        android:shortcutLongLabel="@string/shortcut_unlock_long"
+        android:shortcutDisabledMessage="@string/shortcut_disabled">
+        <intent
+            android:action="com.saivenkatkrishna.ghostblue.action.SHORTCUT"
+            android:targetPackage="com.saivenkatkrishna.ghostblue"
+            android:targetClass="com.saivenkatkrishna.ghostblue.shortcuts.ShortcutActivity">
+            <extra android:name="command" android:value="unlock" />
+        </intent>
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <parameter-binding android:key="feature" android:value="unlock" />
+        </capability-binding>
+    </shortcut>
+    <shortcut
+        android:shortcutId="start_climate"
+        android:enabled="true"
+        android:icon="@drawable/shortcut_climate"
+        android:shortcutShortLabel="@string/shortcut_climate_short"
+        android:shortcutLongLabel="@string/shortcut_climate_long"
+        android:shortcutDisabledMessage="@string/shortcut_disabled">
+        <intent
+            android:action="com.saivenkatkrishna.ghostblue.action.SHORTCUT"
+            android:targetPackage="com.saivenkatkrishna.ghostblue"
+            android:targetClass="com.saivenkatkrishna.ghostblue.shortcuts.ShortcutActivity">
+            <extra android:name="command" android:value="start_climate" />
+        </intent>
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <parameter-binding android:key="feature" android:value="start_climate" />
+        </capability-binding>
+    </shortcut>
+    <shortcut
+        android:shortcutId="refresh"
+        android:enabled="true"
+        android:icon="@drawable/shortcut_refresh"
+        android:shortcutShortLabel="@string/shortcut_refresh_short"
+        android:shortcutLongLabel="@string/shortcut_refresh_long"
+        android:shortcutDisabledMessage="@string/shortcut_disabled">
+        <intent
+            android:action="com.saivenkatkrishna.ghostblue.action.SHORTCUT"
+            android:targetPackage="com.saivenkatkrishna.ghostblue"
+            android:targetClass="com.saivenkatkrishna.ghostblue.shortcuts.ShortcutActivity">
+            <extra android:name="command" android:value="refresh" />
+        </intent>
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <parameter-binding android:key="feature" android:value="refresh" />
+        </capability-binding>
+    </shortcut>
+</shortcuts>

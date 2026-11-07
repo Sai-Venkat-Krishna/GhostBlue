@@ -2,14 +2,20 @@ package com.saivenkatkrishna.ghostblue
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import com.saivenkatkrishna.ghostblue.ui.GhostBlueApp
 
-class MainActivity : ComponentActivity() {
+/** A `FragmentActivity`, which `BiometricPrompt` needs for the app lock. */
+class MainActivity : FragmentActivity() {
     /** A backup file opened from another app, waiting for the import sheet. */
     private val incomingBackup = MutableStateFlow<Uri?>(null)
 
@@ -23,6 +29,14 @@ class MainActivity : ComponentActivity() {
         val graph = (application as GhostBlueApplication).graph
         setContent {
             GhostBlueApp(graph, incomingBackup, openVehicle = openVehicle)
+        }
+        // With the app lock on, the recent-apps preview is blank, as iOS blurs the app switcher.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            lifecycleScope.launch {
+                repeatOnLifecycle(Lifecycle.State.CREATED) {
+                    graph.settings.requireAppLock.collect { setRecentsScreenshotEnabled(!it) }
+                }
+            }
         }
     }
 
