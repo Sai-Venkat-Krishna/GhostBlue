@@ -50,6 +50,22 @@ enum class WidgetRefreshInterval(val hours: Int, val displayName: String) {
 }
 
 /**
+ * How long GhostBlue may sit in the background before the app lock asks
+ * again. iOS locks as soon as the app leaves the screen, as "Immediately"
+ * does; Android adds longer grace periods.
+ */
+enum class AppLockTimeout(val seconds: Long, val displayName: String) {
+    IMMEDIATELY(0, "Immediately"),
+    ONE_MINUTE(60, "After 1 minute"),
+    FIVE_MINUTES(300, "After 5 minutes"),
+    FIFTEEN_MINUTES(900, "After 15 minutes");
+
+    companion object {
+        fun fromSeconds(seconds: Long): AppLockTimeout = entries.firstOrNull { it.seconds == seconds } ?: IMMEDIATELY
+    }
+}
+
+/**
  * The owner's preferences: the port of iOS's `AppSettings`, with the same
  * keys and defaults where the setting exists on both. Each one is a
  * [StateFlow] so screens follow changes.
@@ -137,6 +153,23 @@ class AppSettings(private val prefs: SharedPreferences) {
         return if (start <= end) hour in start until end else hour >= start || hour < end
     }
 
+    private val _requireAppLock = MutableStateFlow(prefs.getBoolean(REQUIRE_BIOMETRIC_UNLOCK, false))
+
+    /** iOS's "Require Face ID or device passcode": the app opens behind fingerprint, face or the screen lock. */
+    val requireAppLock: StateFlow<Boolean> = _requireAppLock.asStateFlow()
+
+    private val _appLockTimeout = MutableStateFlow(AppLockTimeout.fromSeconds(prefs.getLong(APP_LOCK_TIMEOUT, 0)))
+    val appLockTimeout: StateFlow<AppLockTimeout> = _appLockTimeout.asStateFlow()
+
+    private val _allowAutomation = MutableStateFlow(prefs.getBoolean(ALLOW_AUTOMATION, false))
+
+    /**
+     * Whether Google Assistant and apps such as Tasker may send commands
+     * through GhostBlue's public command intent. The launcher's own
+     * shortcuts don't need it.
+     */
+    val allowAutomation: StateFlow<Boolean> = _allowAutomation.asStateFlow()
+
     private val _selectedVin = MutableStateFlow(prefs.getString(SELECTED_VIN, null))
 
     /** The car Home, Location, Energy and Trips show. */
@@ -219,6 +252,21 @@ class AppSettings(private val prefs: SharedPreferences) {
         prefs.edit().putBoolean(QUIET_HOURS_ENABLED, enabled).putInt(QUIET_HOURS_START, start).putInt(QUIET_HOURS_END, end).apply()
     }
 
+    fun setRequireAppLock(value: Boolean) {
+        _requireAppLock.value = value
+        prefs.edit().putBoolean(REQUIRE_BIOMETRIC_UNLOCK, value).apply()
+    }
+
+    fun setAppLockTimeout(value: AppLockTimeout) {
+        _appLockTimeout.value = value
+        prefs.edit().putLong(APP_LOCK_TIMEOUT, value.seconds).apply()
+    }
+
+    fun setAllowAutomation(value: Boolean) {
+        _allowAutomation.value = value
+        prefs.edit().putBoolean(ALLOW_AUTOMATION, value).apply()
+    }
+
     fun setSelectedVin(value: String?) {
         _selectedVin.value = value
         prefs.edit().putString(SELECTED_VIN, value).apply()
@@ -244,9 +292,12 @@ class AppSettings(private val prefs: SharedPreferences) {
         const val QUIET_HOURS_END = "QuietHoursEnd"
         const val TRIPS_DETAILED_MODE = "TripsDetailedMode"
         const val LAST_VIEWED_TRIPS_DATE = "LastViewedTripsDate"
+        const val REQUIRE_BIOMETRIC_UNLOCK = "RequireBiometricUnlock"
 
         // Android's own.
         const val DYNAMIC_COLOR = "DynamicColor"
         const val SELECTED_VIN = "SelectedVehicleVIN"
+        const val APP_LOCK_TIMEOUT = "AppLockTimeout"
+        const val ALLOW_AUTOMATION = "AllowAutomationCommands"
     }
 }

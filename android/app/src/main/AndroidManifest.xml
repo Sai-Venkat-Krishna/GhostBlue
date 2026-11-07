@@ -36,6 +36,9 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
 
             <!-- A .ghostbluebackup file opened or shared from another app, as iOS's document type. -->
             <intent-filter>
@@ -142,6 +145,27 @@
                 android:name="android.service.quicksettings.TOGGLEABLE_TILE"
                 android:value="true" />
         </service>
+
+        <!--
+            Shortcuts and automation: sends a command and finishes, with no window of its own.
+            Not exported, so only GhostBlue's launcher shortcuts reach it directly; other apps
+            (Assistant, Routines, Tasker) use the alias below, which the owner turns on in Settings.
+        -->
+        <activity
+            android:name=".shortcuts.ShortcutActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:theme="@style/Theme.GhostBlue.Transparent" />
+        <activity-alias
+            android:name=".shortcuts.AutomationCommandActivity"
+            android:exported="true"
+            android:targetActivity=".shortcuts.ShortcutActivity">
+            <intent-filter>
+                <action android:name="com.saivenkatkrishna.ghostblue.action.COMMAND" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity-alias>
 
         <receiver
             android:name=".background.SmartChargingAlarmReceiver"

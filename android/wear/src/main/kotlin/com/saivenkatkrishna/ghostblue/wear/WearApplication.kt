@@ -1,6 +1,7 @@
 package com.saivenkatkrishna.ghostblue.wear
 
 import android.app.Application
+import android.app.KeyguardManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.SharedPreferences
@@ -11,6 +12,7 @@ import androidx.wear.watchface.complications.datasource.ComplicationDataSourceUp
 import com.saivenkatkrishna.ghostblue.data.account.AccountControllers
 import com.saivenkatkrishna.ghostblue.data.account.AccountHandoff
 import com.saivenkatkrishna.ghostblue.data.account.HTTPLogSinkManager
+import com.saivenkatkrishna.ghostblue.data.account.RemoteCommandLog
 import com.saivenkatkrishna.ghostblue.data.db.GhostBlueDatabase
 import com.saivenkatkrishna.ghostblue.data.model.DeviceType
 import com.saivenkatkrishna.ghostblue.data.vehicle.VehicleStatusEvents
@@ -102,10 +104,15 @@ class WearGraph(
     val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     /** Seconds between checks after a command; tests shorten it. */
     val commandWaitSeconds: Int = 10,
+    /** Whether the watch has a screen lock (PIN, pattern); without one the tile won't unlock the car by itself. */
+    val isDeviceSecure: () -> Boolean = { context.getSystemService(KeyguardManager::class.java)?.isDeviceSecure == true },
 ) {
     val logSinks = HTTPLogSinkManager(db, scope, DeviceType.WATCH)
     val controllers = AccountControllers(db, scope, logSinks, sourceName = DeviceType.WATCH.displayName)
     val model = WatchModel(db, settings, controllers, scope, commandWaitSeconds)
+
+    /** A car whose Unlock the tile handed to the app to confirm, as the watch has no screen lock. */
+    val unlockToConfirm = MutableStateFlow<String?>(null)
 
     /** Redraws the tile and complications from the latest status. */
     fun refreshSurfaces() {
@@ -123,6 +130,7 @@ class WearGraph(
      */
     @OptIn(FlowPreview::class)
     fun start() {
+        scope.launch { RemoteCommandLog.prune(db) }
         scope.launch { VehicleStatusEvents.statusUpdated.debounce(500).collect { refreshSurfaces() } }
         scope.launch { model.commands.drop(1).debounce(500).collect { refreshSurfaces() } }
         scope.launch {

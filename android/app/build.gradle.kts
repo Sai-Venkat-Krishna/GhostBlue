@@ -71,6 +71,9 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    // The app lock: whether the app went to the background, and BiometricPrompt.
+    implementation(libs.androidx.lifecycle.process)
+    implementation(libs.androidx.biometric)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.material3)

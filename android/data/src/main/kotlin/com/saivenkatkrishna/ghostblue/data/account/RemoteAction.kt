@@ -1,5 +1,6 @@
 package com.saivenkatkrishna.ghostblue.data.account
 
+import com.saivenkatkrishna.ghostblue.data.model.ClimatePreset
 import com.saivenkatkrishna.ghostblue.kit.model.APIError
 import com.saivenkatkrishna.ghostblue.kit.model.VehicleStatus
 
@@ -40,19 +41,22 @@ enum class RemoteAction(val title: String, val progress: String, val done: Strin
 /**
  * Sends [action] and waits for the car to report it, reporting progress as
  * iOS's intents do ("Command sent", "Waiting for vehicle (1/3)"). Climate
- * starts with the selected preset, as everywhere else.
+ * starts with [preset] when one is named (iOS's Start Climate Control
+ * intent), else the selected preset, as everywhere else.
  */
 suspend fun AccountController.perform(
     vin: String,
     action: RemoteAction,
     waitSeconds: Int = 10,
+    preset: ClimatePreset? = null,
     onProgress: (String) -> Unit = {},
 ) {
     onProgress("Sending command...")
     when (action) {
         RemoteAction.LOCK -> lockVehicle(vin)
         RemoteAction.UNLOCK -> unlockVehicle(vin)
-        RemoteAction.START_CLIMATE -> startClimate(vin)
+        RemoteAction.START_CLIMATE ->
+            if (preset != null) startClimate(vin, preset.climateOptions, preset.name, preset.iconName) else startClimate(vin)
         RemoteAction.STOP_CLIMATE -> stopClimate(vin)
         RemoteAction.START_CHARGE -> startCharge(vin)
         RemoteAction.STOP_CHARGE -> stopCharge(vin)

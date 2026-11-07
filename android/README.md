@@ -41,7 +41,8 @@ phases, all of them in this folder.
     login and token reuse, re-authentication rules, commands, trips and
     smart charging. Also `CachedAPIClient`, the HTTP log sink and
     `RoomFakeVehicleStore`, which makes the test car's server state the app's
-    own vehicle row, as on iOS. `AccountSetup` signs an account in (the test
+    own vehicle row, as on iOS, and `RemoteCommandLog`, which trims the
+    command log. `AccountSetup` signs an account in (the test
     account with its test cars) and `RemoteAction` sends a command and waits
     for the car, for the phone, its widgets and the watch alike;
     `AccountHandoff` is the format and merge rules of the accounts the phone
@@ -76,7 +77,36 @@ phases, all of them in this folder.
   - `settings/`: accounts (sign-in, including the test account and its test
     cars), vehicles, theme, units, privacy, backups through the share sheet
     and file picker (and `.ghostbluebackup` files opened from other apps),
-    HTTP logs and about.
+    HTTP logs and about. Each car has its maintenance reminders (iOS's
+    `MaintenanceCenterView`: Quick add, a reminder by date or odometer with
+    notes and cost, edited, completed or deleted later) and its remote
+    activity; Privacy has every car's remote activity (iOS's
+    `RemoteCommandActivityView`, newest first, swipe to delete, Clear).
+  - The Energy tab's Charging Costs sheet is iOS's Charging Costs plus the
+    tariff of its Charging Intelligence: this month's cost, projection and
+    energy against a monthly budget, the super off-peak, on-peak (4–9 PM),
+    DC fast and other rates, and the off-peak hours used when SDG&E smart
+    charging is off.
+  - `security/` and `lock/`: the app lock, iOS's Face ID lock. With it on
+    (Settings › Privacy), GhostBlue opens behind `BiometricPrompt`
+    (fingerprint, face, or the screen lock as fallback) and locks again when
+    it comes back after the chosen timeout. Turning it on asks first; the
+    recent-apps preview is blank while it's on.
+  - `shortcuts/`: iOS's App Intents and App Shortcuts. Lock, Unlock, Start
+    climate and Refresh are static shortcuts for the selected car; the app
+    adds dynamic ones for that car (Start climate with its preset, Stop
+    climate, charging, each other preset). Touch and hold the icon for Lock,
+    Unlock, Start climate and Stop climate; the rest are in the launcher's
+    shortcut list. Google Assistant, Routines and apps like Tasker send the
+    intent `com.saivenkatkrishna.ghostblue.action.COMMAND` with a `command`
+    extra (`lock`, `unlock`, `start_climate`, `stop_climate`, `start_charge`,
+    `stop_charge`, `refresh` or `smart_charging`) and optionally `vehicle`
+    (a name or VIN) and `preset`, once the owner allows them in Settings ›
+    Shortcuts & automation. Commands run through `CommandWorker`, so they
+    wait for the car and show progress like widget commands; Unlock waits
+    for the phone to be unlocked first. `res/xml/shortcuts.xml` also declares
+    an App Actions capability (`actions.intent.OPEN_APP_FEATURE`), which
+    Assistant only picks up for an app published on Google Play.
   - Layouts use two columns from 600 dp wide, as iOS's `AdaptiveLayout`.
   - `widgets/`: Glance widgets for iOS's Command Center (small, medium and
     large, with lock and climate buttons and a refresh), Charge Dial and
@@ -108,16 +138,36 @@ phases, all of them in this folder.
     over the Wearable Data Layer whenever they change.
 
   Where Android differs from iOS: smart charging posts what it changed
-  (iOS shows it only in Shortcuts); widget and tile commands wait for the
-  car and show progress, where iOS's intents only send; there are no lock
-  screen widgets or Dynamic Island. Each car's alert rules and its
-  low-battery, unplugged and precondition automations are in Settings ›
-  Vehicles.
+  (iOS shows it only in Shortcuts); widget, tile and shortcut commands wait
+  for the car and show progress, where iOS's intents only send; there are
+  no lock screen widgets or Dynamic Island. Each car's alert rules, its
+  low-battery, unplugged and precondition automations, maintenance and
+  remote activity are in Settings › Vehicles. The app lock can wait 1, 5 or
+  15 minutes before locking again (iOS locks as soon as the app leaves the
+  screen, Android's "Immediately"). The command log keeps a year and at most
+  500 commands, and closes one left "sending" by a process that died; iOS
+  keeps every row. Other apps can send commands only once the owner allows
+  it, since any app could send the intent, and Unlock from a shortcut or
+  automation needs the phone unlocked. On a watch with no screen lock, the
+  watch tile's Unlock opens the watch app to confirm instead of unlocking
+  the car in one tap.
 
-  iOS screens not ported yet: rearranging Home's sections, the ABRP route
-  planner, the rest of the ownership hub (maintenance reminders are kept
-  and notified, but not edited), the test-car editor, the verification-code
-  (MFA) prompt, Face ID lock, troubleshooting and the debug export.
+  iOS features not ported yet:
+  - Screens: rearranging Home's sections, the ABRP route planner, the
+    ownership hub's multi-car overview and its "Find nearby charging
+    stations" link, the test-car editor, troubleshooting, the debug export
+    and the Setup Guide.
+  - Widgets and live progress: the Hero Card widget, and climate's live
+    progress (Android's ongoing notification covers charging only).
+  - ABRP's battery-level telemetry.
+  - Vehicle settings: the powertrain override, the charge-port type and the
+    widget background controls.
+  - Appearance: the dashboard preset, car size and accent colour.
+  - Privacy: the ownership summary export and "Delete history and
+    ownership data".
+
+  The verification-code (MFA) prompt isn't needed: Hyundai USA's sign-in
+  never asks for a code.
 
 - **`wear/`**: the Wear OS app (Wear Compose Material 3, wallpaper colours or
   the Rivian look), a port of `GhostBlueWatch Watch App`. The watch has its own
@@ -149,9 +199,10 @@ phases, all of them in this folder.
   data goes into Android's backups or device-to-device transfers; GhostBlue's
   own backup file is the way to move to another phone.
 
-Not ported yet: Kia USA, Hyundai Canada and Europe, and MFA. The factory
-reports these as not yet supported; unlike iOS, which falls back to the test
-car when it can't make a client, Android says so.
+Not ported yet: Kia USA, Hyundai Canada and Europe, and with them MFA (Hyundai
+USA never asks for a verification code). The factory reports these as not yet
+supported; unlike iOS, which falls back to the test car when it can't make a
+client, Android says so.
 
 Where the data layer differs from iOS:
 
@@ -178,7 +229,10 @@ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 The `data` tests run Room under Robolectric, so they need no emulator. So do
 the `app` tests: Compose UI tests of the main flows against the test car
 (signing in, lock and climate, each tab, units, the Rivian theme, a manual
-charging session, trips, privacy, backups, HTTP logs), the two-column layouts
+charging session, trips, privacy, backups, HTTP logs, the app lock, charging
+prices and the budget, remote activity, maintenance), shortcuts and the
+automation intent (who may send, the car and preset, Unlock waiting for the
+phone), the two-column layouts
 at a Pixel Fold's inner-screen size, the screens' ported rules, and phase
 4's workers, schedules, tiles and widget content. They
 include ports of the iOS suites (EnergySessionAccuracy, ChargingReliability,
@@ -186,7 +240,8 @@ SmartChargingAutomation, WakeUpReduction, BackupArchive, BackupTransfer,
 VehicleArchive, OwnershipFeature) with the smart-charging waits on virtual time.
 The `wear` tests run the watch app the same way on a round watch screen
 (signing in with the test account, lock, settings) and check the tile and
-complication content.
+complication content, including the tile's Unlock on a watch with no screen
+lock.
 
 ### Google Maps
 

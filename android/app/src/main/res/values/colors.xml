@@ -1,4 +1,7 @@
 <resources>
     <!-- GhostBlue's blue, the fallback palette's primary. -->
     <color name="ic_launcher_background">#2456C6</color>
+    <!-- Launcher shortcuts: GhostBlue's blue as a tonal container. -->
+    <color name="shortcut_background">#D9E2FF</color>
+    <color name="shortcut_foreground">#2456C6</color>
 </resources>
