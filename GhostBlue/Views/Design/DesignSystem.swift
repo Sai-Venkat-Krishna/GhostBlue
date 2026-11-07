@@ -58,9 +58,19 @@ private struct GBAccessibleGlassModifier: ViewModifier {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.gbSolidCardColor) private var solid
+    @Environment(\.gbExpressiveShapes) private var expressive
+
+    /// Material cards have no outline unless contrast is increased.
+    private var strokeOpacity: Double {
+        if contrast == .increased { return 0.42 }
+        return expressive ? 0 : 0.10
+    }
 
     func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        let shape = RoundedRectangle(
+            cornerRadius: gbCardRadius(radius, expressive: expressive),
+            style: .continuous
+        )
         Group {
             if let solid {
                 content
@@ -77,7 +87,7 @@ private struct GBAccessibleGlassModifier: ViewModifier {
         }
         .overlay {
             shape.stroke(
-                Color.white.opacity(contrast == .increased ? 0.42 : 0.10),
+                Color.white.opacity(strokeOpacity),
                 lineWidth: contrast == .increased ? 1.5 : 0.5
             )
         }
@@ -89,8 +99,20 @@ private struct GBAccessibleCircleModifier: ViewModifier {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.gbSolidCardColor) private var solid
+    @Environment(\.gbExpressiveShapes) private var material
 
     func body(content: Content) -> some View {
+        if material {
+            // Material's top-bar icon buttons have no container.
+            content
+                .foregroundStyle(MDTokens.onSurfaceVariant)
+                .contentShape(Circle())
+        } else {
+            surfaced(content)
+        }
+    }
+
+    private func surfaced(_ content: Content) -> some View {
         Group {
             if let solid {
                 content.background(solid, in: Circle())
@@ -122,12 +144,12 @@ private struct GBAccessibleCircleModifier: ViewModifier {
 struct GBBackground: View {
     let colors: [Color]
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.gbRivianBackdrop) private var rivianBackdrop
+    @Environment(\.gbSolidBackdrop) private var solidBackdrop
     @State private var driftingGlow = false
 
     var body: some View {
-        if rivianBackdrop {
-            RV.background.ignoresSafeArea().allowsHitTesting(false)
+        if let solidBackdrop {
+            solidBackdrop.ignoresSafeArea().allowsHitTesting(false)
         } else {
             classicBackdrop
         }
@@ -195,8 +217,23 @@ extension BBVehicle {
 /// Uppercase, letter-spaced label above a group of cards.
 struct GBSectionHeader: View {
     let title: String
+    @State private var settings = AppSettings.shared
 
     var body: some View {
+        if settings.appTheme == .material {
+            // Android's section titles: title case, titleMedium.
+            Text(title)
+                .font(MDType.titleMedium)
+                .foregroundStyle(MDTokens.onSurface)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 8)
+                .accessibilityAddTraits(.isHeader)
+        } else {
+            classic
+        }
+    }
+
+    private var classic: some View {
         Text(title.uppercased())
             .font(.system(size: 12, weight: .heavy))
             .tracking(2.2)

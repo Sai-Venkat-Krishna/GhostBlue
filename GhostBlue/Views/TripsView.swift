@@ -374,10 +374,17 @@ struct TripsView: View {
                             }
                         }
                     } header: {
-                        tripFilterBar
-                            .padding(.vertical, 8)
-                            .padding(.horizontal, 4)
-                            .background(.ultraThinMaterial, in: Capsule())
+                        if appSettings.appTheme == .material {
+                            // No container, as on Android; the page colour
+                            // keeps it legible while it's pinned.
+                            tripFilterBar
+                                .background(MDTokens.background)
+                        } else {
+                            tripFilterBar
+                                .padding(.vertical, 8)
+                                .padding(.horizontal, 4)
+                                .background(.ultraThinMaterial, in: Capsule())
+                        }
                     }
                 }
                 }
@@ -497,7 +504,7 @@ struct TripsView: View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Trips")
-                    .font(.gbDisplay)
+                    .font(appSettings.appTheme == .material ? MDType.pageTitle : .gbDisplay)
 
                 if displayedVehicles.count > 1 {
                     Menu {
@@ -611,7 +618,28 @@ struct TripsView: View {
 
     // MARK: - Filters
 
+    @ViewBuilder
     private var tripFilterBar: some View {
+        if appSettings.appTheme == .material {
+            // Android's date filter: connected toggle buttons, no container.
+            MDToggleGroup(
+                options: TripDateFilter.allCases,
+                selection: Binding(
+                    get: { selectedFilter },
+                    set: { filter in
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                            selectedFilter = filter
+                            expandedTripId = nil
+                        }
+                    }
+                )
+            ) { $0.title }
+        } else {
+            classicTripFilterBar
+        }
+    }
+
+    private var classicTripFilterBar: some View {
         HStack(spacing: 8) {
             ForEach(TripDateFilter.allCases) { filter in
                 Button {
@@ -746,7 +774,7 @@ struct TripsView: View {
                 showingTripComparison = true
             }
             .font(.caption.bold())
-            .buttonStyle(.borderedProminent)
+            .gbProminentButtonStyle()
             .disabled(comparedTripIDs.count != 2)
         }
         .padding(12)
@@ -1498,7 +1526,7 @@ struct TripsView: View {
                     selectedFilter = .all
                 }
             }
-            .buttonStyle(.borderedProminent)
+            .gbProminentButtonStyle()
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 44)
@@ -1518,7 +1546,7 @@ struct TripsView: View {
                 guard let bbVehicle else { return }
                 Task { await loadTrips(for: bbVehicle) }
             }
-            .buttonStyle(.borderedProminent)
+            .gbProminentButtonStyle()
         }
         .frame(maxWidth: .infinity)
         .padding(20)

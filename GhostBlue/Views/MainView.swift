@@ -247,7 +247,7 @@ struct MainView: View {
                 )
             }
 
-            Tab(appSettings.appTheme == .rivian ? "Energy" : "Charging", systemImage: "bolt.fill", value: AppTab.charging) {
+            Tab(appSettings.appTheme.energyTabTitle, systemImage: "bolt.fill", value: AppTab.charging) {
                 ChargingView(
                     displayedVehicles: displayedVehicles,
                     selectedVehicleIndex: $selectedVehicleIndex,
@@ -263,9 +263,14 @@ struct MainView: View {
             .badge(newTripCount > 0 ? Text("•") : nil)
         }
         .tint(appSettings.accentColor)
-        .environment(\.themeMotion, appSettings.appTheme == .rivian ? .rivian : .standard)
-        .background(TabBarReselectObserver())
-        .animation(appSettings.appTheme == .rivian ? ThemeMotion.rivian.emphasis : .easeInOut(duration: 0.24), value: selectedTab)
+        .environment(\.themeMotion, ThemeMotion.forTheme(appSettings.appTheme))
+        .background(TabBarReselectObserver(theme: appSettings.appTheme))
+        .animation(
+            ThemeMotion.forTheme(appSettings.appTheme).style == .standard
+                ? .easeInOut(duration: 0.24)
+                : ThemeMotion.forTheme(appSettings.appTheme).emphasis,
+            value: selectedTab
+        )
     }
 
     /// Wraps the empty/error states in a NavigationStack so Settings stays
@@ -332,7 +337,7 @@ private struct AppLockView: View {
                             .frame(maxWidth: .infinity)
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .gbProminentButtonStyle()
                 .controlSize(.large)
                 .frame(maxWidth: 280)
                 .disabled(isAuthenticating)
@@ -348,14 +353,25 @@ private struct AppLockView: View {
 /// adds a non-cancelling gesture to the system tab bar and converts a second
 /// tap into the familiar "return to top" behavior.
 private struct TabBarReselectObserver: UIViewControllerRepresentable {
+    /// The tab bar's look follows the theme; Material gets Android's
+    /// navigation bar colours.
+    let theme: AppTheme
+
     func makeUIViewController(context: Context) -> ObserverViewController {
-        ObserverViewController()
+        let controller = ObserverViewController()
+        controller.theme = theme
+        return controller
     }
 
-    func updateUIViewController(_ uiViewController: ObserverViewController, context: Context) {}
+    func updateUIViewController(_ uiViewController: ObserverViewController, context: Context) {
+        guard uiViewController.theme != theme else { return }
+        uiViewController.theme = theme
+        uiViewController.applyAppearance()
+    }
 
     final class ObserverViewController: UIViewController {
         private weak var observedTabBar: UITabBar?
+        var theme: AppTheme = .hyundaiBlue
 
         override func viewDidAppear(_ animated: Bool) {
             super.viewDidAppear(animated)
@@ -370,23 +386,49 @@ private struct TabBarReselectObserver: UIViewControllerRepresentable {
             let recognizer = UITapGestureRecognizer(target: self, action: #selector(tabBarTapped(_:)))
             recognizer.cancelsTouchesInView = false
             tabController.tabBar.addGestureRecognizer(recognizer)
+            observedTabBar = tabController.tabBar
+            applyAppearance()
+        }
+
+        func applyAppearance() {
+            guard let tabBar = tabBarController?.tabBar else { return }
 
             let appearance = UITabBarAppearance()
-            if UIAccessibility.isReduceTransparencyEnabled {
+            if theme == .material {
+                // Android's navigation bar: a surfaceContainer bar following
+                // light/dark, primary for the selected tab.
                 appearance.configureWithOpaqueBackground()
-                appearance.backgroundColor = UIColor.black.withAlphaComponent(0.94)
+                appearance.backgroundColor = UIColor(MDTokens.surfaceContainer)
+                appearance.shadowColor = .clear
+                let selected = UIColor(MDTokens.primary)
+                let normal = UIColor(MDTokens.onSurfaceVariant)
+                for layout in [
+                    appearance.stackedLayoutAppearance,
+                    appearance.inlineLayoutAppearance,
+                    appearance.compactInlineLayoutAppearance
+                ] {
+                    layout.selected.iconColor = selected
+                    layout.selected.titleTextAttributes = [.foregroundColor: selected]
+                    layout.normal.iconColor = normal
+                    layout.normal.titleTextAttributes = [.foregroundColor: normal]
+                }
+                tabBar.layer.shadowOpacity = 0
             } else {
-                appearance.configureWithTransparentBackground()
-                appearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterialDark)
-                appearance.backgroundColor = UIColor.black.withAlphaComponent(0.24)
+                if UIAccessibility.isReduceTransparencyEnabled {
+                    appearance.configureWithOpaqueBackground()
+                    appearance.backgroundColor = UIColor.black.withAlphaComponent(0.94)
+                } else {
+                    appearance.configureWithTransparentBackground()
+                    appearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterialDark)
+                    appearance.backgroundColor = UIColor.black.withAlphaComponent(0.24)
+                }
+                tabBar.layer.shadowColor = UIColor.black.cgColor
+                tabBar.layer.shadowOpacity = 0.20
+                tabBar.layer.shadowRadius = 16
+                tabBar.layer.shadowOffset = CGSize(width: 0, height: -5)
             }
-            tabController.tabBar.standardAppearance = appearance
-            tabController.tabBar.scrollEdgeAppearance = appearance
-            tabController.tabBar.layer.shadowColor = UIColor.black.cgColor
-            tabController.tabBar.layer.shadowOpacity = 0.20
-            tabController.tabBar.layer.shadowRadius = 16
-            tabController.tabBar.layer.shadowOffset = CGSize(width: 0, height: -5)
-            observedTabBar = tabController.tabBar
+            tabBar.standardAppearance = appearance
+            tabBar.scrollEdgeAppearance = appearance
         }
 
         @objc private func tabBarTapped(_ recognizer: UITapGestureRecognizer) {

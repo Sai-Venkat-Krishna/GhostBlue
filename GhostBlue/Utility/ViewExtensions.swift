@@ -74,6 +74,10 @@ private struct GBSolidCardColorKey: EnvironmentKey {
     static let defaultValue: Color? = nil
 }
 
+private struct GBExpressiveShapesKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
 extension EnvironmentValues {
     /// When set (e.g. by the Rivian theme), card surfaces render as this solid colour
     /// instead of Liquid Glass. `nil` (the default) keeps the classic glass look.
@@ -81,14 +85,29 @@ extension EnvironmentValues {
         get { self[GBSolidCardColorKey.self] }
         set { self[GBSolidCardColorKey.self] = newValue }
     }
+
+    /// Set by the Material theme: cards take Material 3 Expressive's larger
+    /// corners (see `gbCardRadius(_:expressive:)`).
+    var gbExpressiveShapes: Bool {
+        get { self[GBExpressiveShapesKey.self] }
+        set { self[GBExpressiveShapesKey.self] = newValue }
+    }
+}
+
+/// A card's corner radius under the current theme. Material 3 Expressive
+/// rounds cards to 28 pt and smaller surfaces to at least 24 pt.
+func gbCardRadius(_ radius: CGFloat, expressive: Bool) -> CGFloat {
+    guard expressive else { return radius }
+    return radius >= 22 ? 28 : 24
 }
 
 private struct VehicleCardSurface: ViewModifier {
     let radius: CGFloat
     @Environment(\.gbSolidCardColor) private var solid
+    @Environment(\.gbExpressiveShapes) private var expressive
 
     func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: radius)
+        let shape = RoundedRectangle(cornerRadius: gbCardRadius(radius, expressive: expressive))
         if let solid {
             content
                 .containerShape(shape)

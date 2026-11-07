@@ -18,9 +18,11 @@ private struct GBShimmerModifier: ViewModifier {
     @State private var settings = AppSettings.shared
 
     private var highlight: Color {
-        settings.appTheme == .rivian
-            ? RivianPalette.gold.opacity(0.4)
-            : Color.white.opacity(0.32)
+        switch settings.appTheme {
+        case .rivian: RivianPalette.gold.opacity(0.4)
+        case .material: MDTokens.primary.opacity(0.22)
+        default: Color.white.opacity(0.32)
+        }
     }
 
     func body(content: Content) -> some View {

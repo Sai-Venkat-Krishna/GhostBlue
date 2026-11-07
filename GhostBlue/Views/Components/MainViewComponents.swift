@@ -70,7 +70,7 @@ struct EmptyAccountsView: View {
                             .font(.headline)
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .gbProminentButtonStyle()
                     .controlSize(.large)
                     .tint(AppSettings.shared.accentColor)
                     .matchedTransitionSource(
@@ -135,8 +135,11 @@ struct EmptyAccountsView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 13)
         .background(
-            AppSettings.shared.appTheme == .rivian ? AnyShapeStyle(RV.surface) : AnyShapeStyle(.thinMaterial),
-            in: RoundedRectangle(cornerRadius: 16)
+            AppSettings.shared.appTheme.solidCardColor.map { AnyShapeStyle($0) } ?? AnyShapeStyle(.thinMaterial),
+            in: RoundedRectangle(
+                cornerRadius: AppSettings.shared.appTheme == .material ? MDTokens.tileRadius : 16,
+                style: .continuous
+            )
         )
     }
 }
@@ -213,7 +216,7 @@ struct EmptyVehiclesView: View {
                         await onRetry?()
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .gbProminentButtonStyle()
                 .disabled(isLoading)
             }
         }

@@ -30,6 +30,7 @@ enum RivianPalette {
 enum ThemeMotionStyle {
     case standard
     case rivian
+    case material
 }
 
 /// A bundle of animation "personality" for a theme. Views read this from the
@@ -57,6 +58,13 @@ struct ThemeMotion {
                 insertion: .move(edge: .trailing).combined(with: .opacity),
                 removal: .opacity
             )
+        case .material:
+            // Material's "fade through": the new content fades in while
+            // growing slightly; the old one only fades.
+            return .asymmetric(
+                insertion: .opacity.combined(with: .scale(scale: 0.92)),
+                removal: .opacity
+            )
         }
     }
 
@@ -78,6 +86,26 @@ struct ThemeMotion {
         snappy: .spring(response: 0.40, dampingFraction: 0.86),
         pressScale: 0.94
     )
+
+    /// Material 3 Expressive's motion scheme, as Compose's
+    /// `MotionScheme.expressive()`: spatial springs with damping 0.8
+    /// (stiffness 380 default, 200 slow) and a bouncier 0.6 for fast moves.
+    static let material = ThemeMotion(
+        style: .material,
+        primary: .spring(response: 0.32, dampingFraction: 0.8),
+        emphasis: .spring(response: 0.44, dampingFraction: 0.8),
+        snappy: .spring(response: 0.22, dampingFraction: 0.6),
+        pressScale: 0.95
+    )
+
+    /// The motion for a theme.
+    static func forTheme(_ theme: AppTheme) -> ThemeMotion {
+        switch theme {
+        case .rivian: .rivian
+        case .material: .material
+        default: .standard
+        }
+    }
 }
 
 private struct ThemeMotionKey: EnvironmentKey {
@@ -120,10 +148,12 @@ extension ButtonStyle where Self == ThemedPressButtonStyle {
 struct RivianScreenStyle: ViewModifier {
     @State private var settings = AppSettings.shared
     func body(content: Content) -> some View {
-        if settings.appTheme == .rivian {
-            content
-                .tint(RivianPalette.gold)
-        } else {
+        switch settings.appTheme {
+        case .rivian:
+            content.tint(RivianPalette.gold)
+        case .material:
+            content.tint(MDTokens.primary)
+        default:
             content
         }
     }
@@ -139,11 +169,16 @@ extension View {
 struct RivianListBackground: ViewModifier {
     @State private var settings = AppSettings.shared
     func body(content: Content) -> some View {
-        if settings.appTheme == .rivian {
+        switch settings.appTheme {
+        case .rivian:
             content
                 .scrollContentBackground(.hidden)
                 .background(RVBackground())
-        } else {
+        case .material:
+            content
+                .scrollContentBackground(.hidden)
+                .background(MDTokens.background.ignoresSafeArea())
+        default:
             content
         }
     }
@@ -159,11 +194,11 @@ extension View {
 struct RivianStatusBarBackdrop: ViewModifier {
     @State private var settings = AppSettings.shared
     func body(content: Content) -> some View {
-        if settings.appTheme == .rivian {
+        if let page = settings.appTheme.solidPageColor {
             content.safeAreaInset(edge: .top, spacing: 0) {
                 Color.clear
                     .frame(height: 0)
-                    .background(RV.background.ignoresSafeArea(edges: .top))
+                    .background(page.ignoresSafeArea(edges: .top))
             }
         } else {
             content
@@ -184,11 +219,56 @@ struct GhostBlueSchemeModifier: ViewModifier {
     @Environment(\.colorScheme) private var inherited
     @State private var settings = AppSettings.shared
     func body(content: Content) -> some View {
-        let isRivian = settings.appTheme == .rivian
+        let theme = settings.appTheme
         content
-            .environment(\.colorScheme, isRivian ? inherited : (classic ?? inherited))
-            .environment(\.gbSolidCardColor, isRivian ? RV.surface : nil)
-            .environment(\.gbRivianBackdrop, isRivian)
+            .environment(\.colorScheme, theme.followsSystemAppearance ? inherited : (classic ?? inherited))
+            .environment(\.gbSolidCardColor, theme.solidCardColor)
+            .environment(\.gbSolidBackdrop, theme.solidPageColor)
+            .environment(\.gbExpressiveShapes, theme == .material)
+    }
+}
+
+extension AppTheme {
+    /// Card colour for themes with solid surfaces instead of Liquid Glass.
+    var solidCardColor: Color? {
+        switch self {
+        case .rivian: RV.surface
+        case .material: MDTokens.surfaceContainer
+        default: nil
+        }
+    }
+
+    /// Rivian and Android (Material) call the charging tab "Energy".
+    var energyTabTitle: String {
+        self == .rivian || self == .material ? "Energy" : "Charging"
+    }
+
+    /// Energy accent: each theme's green, classic cyan otherwise.
+    var energyTint: Color {
+        switch self {
+        case .rivian: RV.energy
+        case .material: MDTokens.energy
+        default: .cyan
+        }
+    }
+
+    /// Accent for small text buttons and badges in lists. Classic themes
+    /// keep the system blue they always used.
+    var listAccent: Color {
+        switch self {
+        case .rivian: RV.accent
+        case .material: MDTokens.primary
+        default: .blue
+        }
+    }
+
+    /// Page colour for themes with a solid backdrop instead of the gradient.
+    var solidPageColor: Color? {
+        switch self {
+        case .rivian: RV.background
+        case .material: MDTokens.background
+        default: nil
+        }
     }
 }
 

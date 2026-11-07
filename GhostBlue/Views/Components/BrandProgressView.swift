@@ -15,9 +15,14 @@ struct BrandProgressView: View {
     @State private var settings = AppSettings.shared
 
     var body: some View {
-        if settings.appTheme == .rivian {
+        switch settings.appTheme {
+        case .rivian:
             RivianLoader(size: size, lineWidth: max(3, size / 12))
-        } else {
+        case .material:
+            // Material's indeterminate circular indicator: a primary arc that
+            // grows and shrinks as it turns.
+            RivianLoader(size: size, color: MDTokens.primary, lineWidth: max(2.5, size / 10))
+        default:
             ProgressView()
         }
     }

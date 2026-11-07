@@ -63,6 +63,8 @@
 	</array>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Use Face ID to protect vehicle controls, trips, and private location data.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Shows where you are on the map next to your vehicle.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

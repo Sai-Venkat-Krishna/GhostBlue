@@ -266,16 +266,17 @@ struct RVCircleButton: View {
 
 // MARK: - Backdrop switch
 
-private struct GBRivianBackdropKey: EnvironmentKey {
-    static let defaultValue = false
+private struct GBSolidBackdropKey: EnvironmentKey {
+    static let defaultValue: Color? = nil
 }
 
 extension EnvironmentValues {
-    /// Set per screen by `ghostBlueColorScheme()` under the Rivian theme; makes
-    /// `GBBackground` draw the Rivian backdrop instead of the classic gradient.
-    var gbRivianBackdrop: Bool {
-        get { self[GBRivianBackdropKey.self] }
-        set { self[GBRivianBackdropKey.self] = newValue }
+    /// Set per screen by `ghostBlueColorScheme()` under the Rivian and Material
+    /// themes; makes `GBBackground` draw this solid page colour instead of the
+    /// classic gradient.
+    var gbSolidBackdrop: Color? {
+        get { self[GBSolidBackdropKey.self] }
+        set { self[GBSolidBackdropKey.self] = newValue }
     }
 }
 
@@ -312,6 +313,12 @@ struct SettingsRowLabel: View {
                 SettingsIconChip(systemImage: systemImage, tint: tint)
                 Text(LocalizedStringKey(title))
             }
+        } else if settings.appTheme == .material {
+            // Material list items lead with a plain icon in onSurfaceVariant.
+            HStack(spacing: 16) {
+                MaterialRowIcon(systemImage: systemImage)
+                Text(LocalizedStringKey(title))
+            }
         } else if classicShowsIcon {
             Label(LocalizedStringKey(title), systemImage: systemImage)
         } else {
@@ -334,8 +341,26 @@ struct RivianRowIcon<Content: View>: View {
                 SettingsIconChip(systemImage: systemImage, tint: tint)
                 content
             }
+        } else if settings.appTheme == .material {
+            HStack(spacing: 16) {
+                MaterialRowIcon(systemImage: systemImage)
+                content
+            }
         } else {
             content
         }
+    }
+}
+
+/// Leading icon of a Material list item.
+struct MaterialRowIcon: View {
+    let systemImage: String
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 18, weight: .medium))
+            .foregroundStyle(MDTokens.onSurfaceVariant)
+            .frame(width: 24)
+            .accessibilityHidden(true)
     }
 }

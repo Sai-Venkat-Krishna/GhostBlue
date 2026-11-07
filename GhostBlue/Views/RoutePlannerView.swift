@@ -118,7 +118,7 @@ struct RoutePlannerView: View {
             NavigationLink("Select Model") {
                 ABRPCarModelPicker(bbVehicle: bbVehicle)
             }
-            .buttonStyle(.borderedProminent)
+            .gbProminentButtonStyle()
         }
     }
 
@@ -241,7 +241,7 @@ struct RoutePlannerView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 4)
                 }
-                .buttonStyle(.borderedProminent)
+                .gbProminentButtonStyle()
 
                 Button("Choose a Different Destination") {
                     previewTrip = nil

@@ -301,6 +301,9 @@ enum AppTheme: String, CaseIterable, Codable, Identifiable, Sendable {
     case aurora
     case minimal
     case rivian
+    /// Android's Material 3 Expressive look, with the Android app's palette
+    /// (`MDTokens`). Stored as "material", as on Android.
+    case material
 
     var id: String { rawValue }
 
@@ -309,6 +312,14 @@ enum AppTheme: String, CaseIterable, Codable, Identifiable, Sendable {
     /// theme files — can resolve it.
     static let rivianGold = Color(red: 1.0, green: 0.675, blue: 0.0)
 
+    /// Material 3 `primary` as the Android app shows it, light and dark.
+    /// Here for the same reason as `rivianGold`.
+    static let materialPrimary = Color(light: 0x475D92, dark: 0xB0C6FF)
+
+    /// Rivian and Material follow the system's light or dark appearance; the
+    /// classic gradient themes are always dark.
+    var followsSystemAppearance: Bool { self == .rivian || self == .material }
+
     var title: String {
         switch self {
         case .midnight: "Midnight"
@@ -316,6 +327,7 @@ enum AppTheme: String, CaseIterable, Codable, Identifiable, Sendable {
         case .aurora: "Aurora"
         case .minimal: "Minimal"
         case .rivian: "Rivian"
+        case .material: "Material You"
         }
     }
 
@@ -331,6 +343,10 @@ enum AppTheme: String, CaseIterable, Codable, Identifiable, Sendable {
             [Color(red: 0.10, green: 0.11, blue: 0.14), Color(red: 0.17, green: 0.18, blue: 0.22)]
         case .rivian:
             [Color(red: 0.04, green: 0.04, blue: 0.045), Color(red: 0.11, green: 0.09, blue: 0.055)]
+        case .material:
+            // Dark surface into dark primaryContainer, for the widgets and
+            // Watch, which draw the classic gradient.
+            [Color(red: 0.071, green: 0.075, blue: 0.094), Color(red: 0.184, green: 0.271, blue: 0.471)]
         }
     }
 }
@@ -651,7 +667,13 @@ class AppSettings {
         return hour >= quietHoursStart || hour < quietHoursEnd
     }
 
-    var accentColor: Color { appTheme == .rivian ? AppTheme.rivianGold : appAccent.color }
+    var accentColor: Color {
+        switch appTheme {
+        case .rivian: AppTheme.rivianGold
+        case .material: AppTheme.materialPrimary
+        default: appAccent.color
+        }
+    }
     var themeColors: [Color] { appTheme.colors }
 
     private init() {

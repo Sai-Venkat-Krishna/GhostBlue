@@ -81,6 +81,9 @@ struct MapTabView: View {
     @State private var routeCoordinates: [CLLocationCoordinate2D] = []
     @State private var appSettings = AppSettings.shared
 
+    /// Kept alive so the permission request isn't dropped.
+    private static let locationManager = CLLocationManager()
+
     private var bbVehicle: BBVehicle? {
         guard selectedVehicleIndex < displayedVehicles.count else { return nil }
         return displayedVehicles[selectedVehicleIndex]
@@ -94,9 +97,13 @@ struct MapTabView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             Map(position: $position) {
+                // Your own position: the blue dot, under the car marker.
+                UserAnnotation()
+
                 if let bbVehicle, let coordinate = bbVehicle.coordinate {
                     Annotation(bbVehicle.displayName, coordinate: coordinate) {
                         VehicleMapMarker(vehicle: bbVehicle, coordinate: coordinate)
+                            .tint(appSettings.accentColor) // its menu, not the map's blue
                     }
                 }
 
@@ -122,12 +129,16 @@ struct MapTabView: View {
                 }
             }
             .mapStyle(.standard(elevation: .realistic))
+            // The user dot takes the map's tint; keep it blue in every theme.
+            .tint(.blue)
             .ignoresSafeArea(edges: .top)
 
             if let bbVehicle {
                 PersistentModelGuard(model: bbVehicle) {
                     if let trip = activeTrip {
                         ActiveTripFooter(trip: trip, vehicle: bbVehicle)
+                    } else if AppSettings.shared.appTheme == .material {
+                        materialFooterCard(for: bbVehicle)
                     } else {
                         footerCard(for: bbVehicle)
                     }
@@ -150,6 +161,11 @@ struct MapTabView: View {
                 frameTrip(animated: false)
             } else {
                 centerOnVehicle(animated: false)
+            }
+            // Ask once for "while using" access so the blue dot can show.
+            if !appSettings.hideVehicleLocation,
+               Self.locationManager.authorizationStatus == .notDetermined {
+                Self.locationManager.requestWhenInUseAuthorization()
             }
         }
         .onChange(of: bbVehicle?.location) { _, _ in
@@ -201,7 +217,7 @@ struct MapTabView: View {
                         Button("Show location") {
                             appSettings.hideVehicleLocation = false
                         }
-                        .buttonStyle(.borderedProminent)
+                        .gbProminentButtonStyle()
                     }
                     .padding(30)
                 }
@@ -288,6 +304,53 @@ struct MapTabView: View {
         .padding(.bottom, 8)
     }
 
+    /// Material theme: Android's bottom card — the car, where it's parked, and
+    /// a full-width Navigate button (with Plan Trip beside it for EVs).
+    private func materialFooterCard(for bbVehicle: BBVehicle) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Android's titleLarge, bold.
+            vehiclePicker(for: bbVehicle, font: .system(size: 22, weight: .bold))
+                .foregroundStyle(MDTokens.onSurface)
+
+            Label {
+                Text(
+                    bbVehicle.coordinate == nil
+                        ? "No location reported yet"
+                        : (bbVehicle.lastUpdated.map { "Parked · \($0.formatted(.relative(presentation: .named)))" } ?? "Parked")
+                )
+                .foregroundStyle(MDTokens.onSurface)
+            } icon: {
+                Image(systemName: bbVehicle.coordinate == nil ? "location.slash" : "parkingsign")
+                    .fontWeight(.bold)
+                    .foregroundStyle(MDTokens.primary)
+            }
+            .font(MDType.bodyLarge)
+
+            HStack(spacing: 8) {
+                if let coordinate = bbVehicle.coordinate {
+                    Menu {
+                        NavigationMenuContent(coordinate: coordinate, destinationName: bbVehicle.displayName)
+                    } label: {
+                        Label("Navigate", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(MDButtonStyle(kind: .filled))
+                }
+                if bbVehicle.fuelType.hasElectricCapability, bbVehicle.evStatus != nil {
+                    MDTonalIconButton(systemImage: "bolt.car.fill", accessibilityLabel: "Plan Trip") {
+                        showingRoutePlanner = true
+                    }
+                }
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(MDTokens.surfaceContainerHigh, in: RoundedRectangle(cornerRadius: MDTokens.cardRadius, style: .continuous))
+        .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+        .padding(.horizontal, GBDesign.screenPadding)
+        .padding(.bottom, 8)
+    }
+
     /// Rivian theme: compact circular Plan Trip and Navigate buttons (Navigate in
     /// solid ink, like the dashboard commands) so the name and status fit.
     @ViewBuilder
@@ -325,7 +388,7 @@ struct MapTabView: View {
     }
 
     @ViewBuilder
-    private func vehiclePicker(for bbVehicle: BBVehicle) -> some View {
+    private func vehiclePicker(for bbVehicle: BBVehicle, font: Font = .headline.weight(.bold)) -> some View {
         if displayedVehicles.count > 1 {
             Menu {
                 ForEach(Array(displayedVehicles.enumerated()), id: \.element.id) { index, vehicle in
@@ -342,7 +405,7 @@ struct MapTabView: View {
             } label: {
                 HStack(spacing: 6) {
                     Text(bbVehicle.displayName)
-                        .font(.headline.weight(.bold))
+                        .font(font)
                         .lineLimit(1)
                     Image(systemName: "chevron.down")
                         .font(.caption2.weight(.bold))
@@ -352,7 +415,7 @@ struct MapTabView: View {
             .buttonStyle(.plain)
         } else {
             Text(bbVehicle.displayName)
-                .font(.headline.weight(.bold))
+                .font(font)
                 .lineLimit(1)
         }
     }

@@ -58,7 +58,7 @@ struct FakeVehicleListView: View {
                     addNewVehicle()
                 }
                 .font(.caption)
-                .foregroundColor(AppSettings.shared.appTheme == .rivian ? RV.accent : .blue)
+                .foregroundColor(AppSettings.shared.appTheme.listAccent)
             }
         }
     }

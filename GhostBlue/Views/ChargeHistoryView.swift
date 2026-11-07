@@ -81,7 +81,7 @@ private struct ChargeEnergyDayPoint: Identifiable {
 /// One charging session as a glass card: charge gained, energy, window.
 struct ChargeSessionCard: View {
     @State private var badgeSettings = AppSettings.shared
-    private var badgeTint: Color { badgeSettings.appTheme == .rivian ? RV.energy : .cyan }
+    private var badgeTint: Color { badgeSettings.appTheme.energyTint }
     let session: ChargeSession
     /// Resolved by the vehicle (manual reading, battery estimate, or bounded
     /// samples) so the card always agrees with the totals and the chart.
@@ -277,10 +277,13 @@ struct ChargeHistoryView: View {
     /// and lay sessions out in two columns.
     private var isWide: Bool { AdaptiveLayout.isWide(screenSize.width) }
 
-    /// Energy accent: Rivian green under the Rivian theme, classic cyan otherwise.
-    private var energyTint: Color { appSettings.appTheme == .rivian ? RV.energy : .cyan }
+    /// Energy accent: the theme's green under Rivian and Material, classic cyan otherwise.
+    private var energyTint: Color { appSettings.appTheme.energyTint }
     private var energyGradient: [Color] {
-        appSettings.appTheme == .rivian ? [RV.energy, RV.energy.opacity(0.55)] : [.cyan, .blue]
+        switch appSettings.appTheme {
+        case .rivian, .material: [energyTint, energyTint.opacity(0.55)]
+        default: [.cyan, .blue]
+        }
     }
 
     private var sessions: [ChargeSession] {
@@ -513,7 +516,32 @@ struct ChargeHistoryView: View {
         }
     }
 
+    @ViewBuilder
     private var rangePicker: some View {
+        if appSettings.appTheme == .material {
+            // Android's RangeCard: connected toggles, then the peak-speed menu.
+            MDSectionCard {
+                MDToggleGroup(options: ChargeHistoryRange.allCases, selection: $selectedRange) { $0.title }
+                HStack {
+                    Text("Peak speed")
+                        .font(MDType.bodyMedium)
+                        .foregroundStyle(MDTokens.onSurface)
+                    Spacer()
+                    Picker("Peak charging speed", selection: $selectedPowerFilter) {
+                        ForEach(ChargePowerFilter.allCases) { filter in
+                            Text(filter.title).tag(filter)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .tint(MDTokens.primary)
+                }
+            }
+        } else {
+            classicRangePicker
+        }
+    }
+
+    private var classicRangePicker: some View {
         VStack(alignment: .leading, spacing: 10) {
             Picker("Charging history range", selection: $selectedRange) {
                 ForEach(ChargeHistoryRange.allCases) { range in
@@ -621,8 +649,8 @@ struct ChargeHistoryView: View {
     private var header: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(appSettings.appTheme == .rivian ? "Energy" : "Charging")
-                    .font(.gbDisplay)
+                Text(appSettings.appTheme.energyTabTitle)
+                    .font(appSettings.appTheme == .material ? MDType.pageTitle : .gbDisplay)
                 vehicleSelector
             }
 
@@ -686,21 +714,32 @@ struct ChargeHistoryView: View {
                     Image(systemName: "chevron.down")
                         .font(.caption2)
                 }
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .font(selectorFont)
+                .foregroundStyle(selectorColor)
             }
             .buttonStyle(.plain)
         } else {
             Text(bbVehicle.displayName)
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .font(selectorFont)
+                .foregroundStyle(selectorColor)
         }
+    }
+
+    /// Material shows the car under the title as Android does: titleSmall, onSurface.
+    private var selectorFont: Font {
+        appSettings.appTheme == .material ? MDType.titleSmall : .footnote.weight(.semibold)
+    }
+
+    private var selectorColor: Color {
+        appSettings.appTheme == .material ? MDTokens.onSurface : .secondary
     }
 
     @ViewBuilder
     private var statusHero: some View {
         if appSettings.appTheme == .rivian {
             RivianEnergyHero(bbVehicle: bbVehicle)
+        } else if appSettings.appTheme == .material {
+            MDEnergyHero(vehicle: bbVehicle)
         } else {
             ChargingStatusSummary(vehicle: bbVehicle)
         }
@@ -975,7 +1014,7 @@ struct ChargeHistoryView: View {
             } label: {
                 Label("Add session manually", systemImage: "plus.circle.fill")
             }
-            .buttonStyle(.borderedProminent)
+            .gbProminentButtonStyle()
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 48)

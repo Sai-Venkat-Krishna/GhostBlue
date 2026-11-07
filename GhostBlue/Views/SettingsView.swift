@@ -69,7 +69,7 @@ struct SettingsView: View {
                             AddAccountView()
                         }
                         .font(.caption)
-                        .foregroundColor(appSettings.appTheme == .rivian ? RV.accent : .blue)
+                        .foregroundColor(appSettings.appTheme.listAccent)
                     }
                 }
 
@@ -111,6 +111,20 @@ struct SettingsView: View {
                         }
                         .accessibilityElement(children: .combine)
                         .accessibilityHint("Set by the Rivian theme")
+                    } else if appSettings.appTheme == .material {
+                        // Android's palette, which Android shows with
+                        // wallpaper colours off. iOS can't read the wallpaper.
+                        HStack(spacing: 16) {
+                            MaterialRowIcon(systemImage: "drop.fill")
+                            Text("Accent")
+                            Spacer()
+                            Image(systemName: "circle.fill")
+                                .foregroundStyle(MDTokens.primary)
+                            Text("Material Blue")
+                                .foregroundStyle(.secondary)
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityHint("Set by the Material You theme")
                     } else {
                         Picker("Accent", selection: $appSettings.appAccent) {
                             ForEach(AppAccent.allCases) { accent in
@@ -187,8 +201,8 @@ struct SettingsView: View {
                                     .fontWeight(.bold)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
-                                    .background(appSettings.appTheme == .rivian ? RV.accent : Color.blue)
-                                    .foregroundColor(.white)
+                                    .background(appSettings.appTheme.listAccent)
+                                    .foregroundColor(appSettings.appTheme == .material ? MDTokens.onPrimary : .white)
                                     .clipShape(Capsule())
                             }
                             .buttonStyle(.plain)
@@ -349,9 +363,11 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
-            .scrollContentBackground(appSettings.appTheme == .rivian ? .hidden : .automatic)
+            .scrollContentBackground(appSettings.appTheme.solidPageColor == nil ? .automatic : .hidden)
             .background {
-                if appSettings.appTheme == .rivian { RVBackground() }
+                if let page = appSettings.appTheme.solidPageColor {
+                    page.ignoresSafeArea()
+                }
             }
             .tint(appSettings.accentColor)
             .toolbar {

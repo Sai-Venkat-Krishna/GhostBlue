@@ -34,6 +34,7 @@ struct RemoteCommandCard: View {
     let action: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.gbExpressiveShapes) private var expressiveShapes
     @State private var appSettings = AppSettings.shared
 
     private var isRunning: Bool { tracker.isRunning }
@@ -91,7 +92,8 @@ struct RemoteCommandCard: View {
         .vehicleCardGlassEffect()
         .commandProgressBorder(
             tracker,
-            shape: .rounded(12),
+            // Same radius as `vehicleCardGlassEffect()` under this theme.
+            shape: .rounded(gbCardRadius(12, expressive: expressiveShapes)),
             tint: appSettings.accentColor,
             successTint: tint
         )

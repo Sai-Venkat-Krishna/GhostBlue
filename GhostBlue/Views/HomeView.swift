@@ -79,6 +79,25 @@ struct HomeView: View {
                         .refreshable { await performRefresh(forced: true) }
                         .task(id: bbVehicle.vin) { await performRefresh(forced: false) }
                         .onDisappear { refreshTask?.cancel() }
+                    } else if appSettings.appTheme == .material {
+                        MaterialDashboard(
+                            bbVehicle: bbVehicle,
+                            vehicleOptions: displayedVehicles,
+                            onSelectVehicle: { selectedVehicleIndex = $0 },
+                            isRefreshing: isRefreshing,
+                            refreshSucceeded: showRefreshSuccess,
+                            refreshCoolingDown: showCooldownFeedback,
+                            onRefresh: manualRefresh,
+                            errorMessage: errorMessage,
+                            onTapError: handleErrorBannerTap,
+                            onOpenSettings: { showingSettings = true },
+                            onOpenLocation: onOpenLocation,
+                            onOpenCharging: onOpenCharging,
+                            onOpenVehicleCenter: { showingOwnershipHub = true }
+                        )
+                        .refreshable { await performRefresh(forced: true) }
+                        .task(id: bbVehicle.vin) { await performRefresh(forced: false) }
+                        .onDisappear { refreshTask?.cancel() }
                     } else {
                         content(for: bbVehicle)
                     }
@@ -284,6 +303,20 @@ struct HomeView: View {
         }
     }
 
+    /// The refresh button: at most once a minute, with a clock as feedback.
+    private func manualRefresh() {
+        if isOnCooldown {
+            showCooldownFeedback = true
+            Task {
+                try? await Task.sleep(for: .seconds(2))
+                await MainActor.run { showCooldownFeedback = false }
+            }
+            return
+        }
+        lastManualRefreshDate = Date()
+        Task { await performRefresh(forced: true) }
+    }
+
     /// "Refreshing status…" while a refresh runs, otherwise the age of the
     /// last status.
     private func headerStatusLine(for vehicle: BBVehicle) -> String? {
@@ -299,18 +332,7 @@ struct HomeView: View {
 
     @ViewBuilder
     private var refreshButton: some View {
-        Button {
-            if isOnCooldown {
-                showCooldownFeedback = true
-                Task {
-                    try? await Task.sleep(for: .seconds(2))
-                    await MainActor.run { showCooldownFeedback = false }
-                }
-                return
-            }
-            lastManualRefreshDate = Date()
-            Task { await performRefresh(forced: true) }
-        } label: {
+        Button(action: manualRefresh) {
             Group {
                 if isRefreshing, reduceMotion {
                     BrandProgressView()
