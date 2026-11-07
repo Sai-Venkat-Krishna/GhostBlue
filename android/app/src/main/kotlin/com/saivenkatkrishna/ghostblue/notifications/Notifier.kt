@@ -14,6 +14,8 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.saivenkatkrishna.ghostblue.MainActivity
 import com.saivenkatkrishna.ghostblue.R
+import com.saivenkatkrishna.ghostblue.data.account.AccountAlertSink
+import com.saivenkatkrishna.ghostblue.data.model.BBAccount
 import com.saivenkatkrishna.ghostblue.data.vehicle.VehicleAlertSink
 import com.saivenkatkrishna.ghostblue.settings.AppSettings
 import java.time.Instant
@@ -35,7 +37,7 @@ enum class Channel(val id: String, val title: String, val description: String, v
  * automations, odometer maintenance) as on iOS, not reminders the owner
  * scheduled. Tapping one opens the car.
  */
-class Notifier(private val context: Context, private val settings: AppSettings) : VehicleAlertSink {
+class Notifier(private val context: Context, private val settings: AppSettings) : VehicleAlertSink, AccountAlertSink {
     private val manager = NotificationManagerCompat.from(context)
 
     fun createChannels() {
@@ -64,6 +66,19 @@ class Notifier(private val context: Context, private val settings: AppSettings) 
         postIfAllowed(channel, vin, title, body, tag = "$vin:$title", quiet = true)
     }
 
+    /** Not held back in quiet hours: nothing refreshes until the owner acts. */
+    override fun loginRejected(account: BBAccount) {
+        val brand = account.brandEnum.displayName
+        postIfAllowed(
+            Channel.ALERTS,
+            vin = null,
+            title = "Sign in to $brand again",
+            body = "$brand refused the saved password, so GhostBlue has stopped signing in. Update it in Settings › Accounts.",
+            tag = "account:${account.id}",
+            quiet = false,
+        )
+    }
+
     fun postReminder(vin: String, title: String, body: String, tag: String) =
         postIfAllowed(Channel.REMINDERS, vin, title, body, tag, quiet = false)
 
@@ -71,7 +86,7 @@ class Notifier(private val context: Context, private val settings: AppSettings) 
     fun postSmartCharging(vin: String, title: String, body: String) =
         postIfAllowed(Channel.SMART_CHARGING, vin, title, body, tag = "$vin:smart", quiet = true)
 
-    private fun postIfAllowed(channel: Channel, vin: String, title: String, body: String, tag: String, quiet: Boolean) {
+    private fun postIfAllowed(channel: Channel, vin: String?, title: String, body: String, tag: String, quiet: Boolean) {
         if (!allows(quiet)) return
         notify(tag, notification(channel, vin, title, body).build())
     }

@@ -131,6 +131,22 @@ object Format {
         }
     }
 
+    /**
+     * "3:41 PM", "3:41 PM yesterday", "3:41 PM Sat", "Oct 28": when data was
+     * last updated, so a widget's two-day-old status doesn't pass for today's.
+     */
+    fun updatedTime(date: Instant, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): String {
+        val day = date.atZone(zone).toLocalDate()
+        val today = now.atZone(zone).toLocalDate()
+        val time = time(date, zone)
+        return when {
+            day >= today -> time
+            day == today.minusDays(1) -> "$time yesterday"
+            day > today.minusDays(7) -> "$time ${pattern(date, "EEE", zone)}"
+            else -> pattern(date, "MMM d", zone)
+        }
+    }
+
     /** Parses what the owner typed, accepting the locale's decimal separator as well as ".". */
     fun parseDecimal(text: String): Double? {
         val trimmed = text.trim()

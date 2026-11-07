@@ -51,6 +51,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
@@ -92,8 +93,15 @@ fun SignInScreen(onBack: () -> Unit, onDone: () -> Unit) {
     var showPassword by rememberSaveable { mutableStateOf(false) }
     var chosenBrand by rememberSaveable { mutableStateOf(Brand.HYUNDAI) }
     var region by rememberSaveable { mutableStateOf(Region.USA) }
-    var working by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<UserError?>(null) }
+    // From the model, which runs the sign-in: it outlives this screen being recreated (rotating, folding).
+    val working by garage.signingIn.collectAsStateWithLifecycle()
+    val error by garage.signInError.collectAsStateWithLifecycle()
+    var opened by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        // A new visit starts clean; a recreated screen keeps the last failure.
+        if (!opened) garage.dismissSignInError()
+        opened = true
+    }
     val testCars = remember { mutableStateListOf<FakeVehicleRecord>() }
     val draftAccountId = remember { UUID.randomUUID() }
 
@@ -109,12 +117,9 @@ fun SignInScreen(onBack: () -> Unit, onDone: () -> Unit) {
 
     fun submit() {
         if (!canSubmit) return
-        working = true
-        error = null
         scope.launch {
             val result = garage.signIn(username, password, pin, brand, region, if (brand == Brand.FAKE) testCars.toList() else emptyList())
-            working = false
-            if (result == null) onDone() else error = result
+            if (result == null) onDone()
         }
     }
 

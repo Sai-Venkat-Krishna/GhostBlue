@@ -41,6 +41,14 @@ class BBAccount() {
     /** Last successful vehicle-list fetch; null when never fetched. */
     var lastVehiclesFetch: Instant? = null
 
+    /**
+     * New on Android: a digest of the username and password the vehicle
+     * service last refused. Logins with them aren't tried again until they
+     * change or the owner re-enters them, so background refreshes can't
+     * lock the account with a stale password. Not part of backups.
+     */
+    var rejectedCredentials: String? = null
+
     @Ignore
     constructor(
         username: String,

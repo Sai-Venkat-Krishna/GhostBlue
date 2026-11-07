@@ -33,6 +33,8 @@ import com.saivenkatkrishna.ghostblue.wear.WatchCommand
 import com.saivenkatkrishna.ghostblue.wear.WatchControl
 import com.saivenkatkrishna.ghostblue.wear.WearMainActivity
 import com.saivenkatkrishna.ghostblue.wear.wearGraph
+import java.time.Duration
+import java.time.Instant
 
 /** What the tile shows for a car, and the buttons it offers. */
 data class TileContent(
@@ -44,7 +46,18 @@ data class TileContent(
     val vin: String?,
 )
 
-fun tileContent(vehicle: BBVehicle?, unit: Distance.Units, command: WatchCommand?): TileContent {
+/** "45m ago", "3h ago", "2d ago" once the data is half an hour old, so an old status doesn't pass for a current one. */
+fun staleAge(lastUpdated: Instant?, now: Instant = Instant.now()): String? {
+    val seconds = lastUpdated?.let { Duration.between(it, now).seconds } ?: return null
+    return when {
+        seconds < 1800 -> null
+        seconds < 3600 -> "${seconds / 60}m ago"
+        seconds < 86_400 -> "${seconds / 3600}h ago"
+        else -> "${seconds / 86_400}d ago"
+    }
+}
+
+fun tileContent(vehicle: BBVehicle?, unit: Distance.Units, command: WatchCommand?, now: Instant = Instant.now()): TileContent {
     if (vehicle == null) return TileContent("GhostBlue", "--", "Open GhostBlue to sign in", null, null, null)
     val range = vehicle.evStatus?.evRange ?: vehicle.gasRange
     val locked = vehicle.lockStatus == VehicleStatus.LockStatus.LOCKED
@@ -57,7 +70,11 @@ fun tileContent(vehicle: BBVehicle?, unit: Distance.Units, command: WatchCommand
     return TileContent(
         title = vehicle.displayName,
         percent = range?.let { "${it.percentage.toInt()}%" } ?: "--",
-        detail = listOfNotNull(range?.let { it.range.units.format(it.range.length, unit) }, state).joinToString(" · "),
+        detail = listOfNotNull(
+            range?.let { it.range.units.format(it.range.length, unit) },
+            state,
+            staleAge(vehicle.lastUpdated, now).takeIf { command == null },
+        ).joinToString(" · "),
         lockAction = if (locked) RemoteAction.UNLOCK else RemoteAction.LOCK,
         climateAction = if (vehicle.climateStatus?.airControlOn == true) RemoteAction.STOP_CLIMATE else RemoteAction.START_CLIMATE,
         vin = vehicle.vin,
@@ -106,6 +123,8 @@ class VehicleTileService : TileService() {
         val command = vehicle?.let { v ->
             graph.model.commands.value[v.vin to WatchControl.LOCK] ?: graph.model.commands.value[v.vin to WatchControl.CLIMATE]
         }
+        // The watch has no background work of its own: the system asking for the tile is when old data is read again.
+        vehicle?.let(graph.model::refreshForSurfaces)
         val content = tileContent(vehicle, graph.settings.distanceUnit.value, command)
         return TileBuilders.Tile.Builder()
             .setResourcesVersion(RESOURCES_VERSION)

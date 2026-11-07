@@ -20,11 +20,11 @@ import kotlinx.coroutines.runBlocking
 const val TEST_USERNAME = "testaccount@betterblue.com"
 const val TEST_PASSWORD = "betterblue"
 
-/** A fresh app: an in-memory database, its own settings, and command checks that don't wait. */
-fun testGraph(): AppGraph {
+/** A fresh app: an in-memory database, its own settings, and command checks that don't wait unless asked to. */
+fun testGraph(commandWaitSeconds: Int = 0): AppGraph {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val prefs = context.getSharedPreferences("test-${UUID.randomUUID()}", Context.MODE_PRIVATE)
-    return AppGraph(context, GhostBlueDatabase.inMemory(context), AppSettings(prefs), commandWaitSeconds = 0)
+    return AppGraph(context, GhostBlueDatabase.inMemory(context), AppSettings(prefs), commandWaitSeconds = commandWaitSeconds)
 }
 
 /** Signs in as the test account (three test cars) without going through the screens. */

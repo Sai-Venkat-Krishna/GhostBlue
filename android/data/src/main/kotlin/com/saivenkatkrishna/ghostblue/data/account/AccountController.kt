@@ -32,6 +32,7 @@ import com.saivenkatkrishna.ghostblue.kit.model.HTTPLogSink
 import com.saivenkatkrishna.ghostblue.kit.model.Vehicle
 import com.saivenkatkrishna.ghostblue.kit.model.VehicleCommand
 import com.saivenkatkrishna.ghostblue.kit.model.VehicleStatus
+import java.security.MessageDigest
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -145,6 +146,14 @@ class AccountController(
             )
         }
 
+        // Every refresh, widget and smart-charging run would otherwise try a
+        // refused password again, which can get the account locked.
+        val credentials = credentialsDigest(account)
+        if (account.rejectedCredentials == credentials) {
+            BBLogger.warning(BBLogCategory.AUTH, "BBAccount: these credentials were refused; not logging in until they change")
+            throw APIError.invalidCredentials(LOGIN_REJECTED_MESSAGE, apiName = "BBAccount")
+        }
+
         try {
             val api = api ?: throw APIError("API client not initialized")
             // A no-op for brands without server-side registration.
@@ -158,10 +167,19 @@ class AccountController(
                 }
                 editAccount { it.deviceId = deviceId }
             }
-            val token = api.login()
+            val token = try {
+                api.login()
+            } catch (error: APIError) {
+                if (isCredentialRejection(error)) {
+                    editAccount { it.rejectedCredentials = credentials }
+                    AccountAlerts.sink.loginRejected(account)
+                }
+                throw error
+            }
             setAuthToken(token)
             // Kept so the next session can re-authenticate with it where the brand allows.
             if (token.refreshToken.isNotEmpty()) editAccount { it.refreshToken = token.refreshToken }
+            if (account.rejectedCredentials != null) editAccount { it.rejectedCredentials = null }
             pendingMFAError = null
         } catch (error: APIError) {
             // Other operations in flight see the challenge too.
@@ -668,6 +686,27 @@ class AccountController(
             }
         }
 
+        /** The message of the error a login with refused credentials throws without asking the server. */
+        const val LOGIN_REJECTED_MESSAGE = "The saved password was refused. Update it in Settings › Accounts."
+
+        /**
+         * Whether a failed login means the service refused the credentials,
+         * rather than being unreachable, busy or asking for a code: a 401, or
+         * any other answer [shouldReauthenticate] doesn't put down to the
+         * network or the server (a 4xx, or a reply that isn't a token).
+         */
+        fun isCredentialRejection(error: APIError): Boolean = when (error.errorType) {
+            APIError.ErrorType.INVALID_CREDENTIALS -> true
+            APIError.ErrorType.GENERAL -> shouldReauthenticate(error)
+            else -> false
+        }
+
+        /** What [BBAccount.rejectedCredentials] holds, so the row keeps no second copy of the password. */
+        internal fun credentialsDigest(account: BBAccount): String =
+            MessageDigest.getInstance("SHA-256")
+                .digest("${account.brand}\u0000${account.username}\u0000${account.password}".toByteArray())
+                .joinToString("") { "%02x".format(it) }
+
         /** Deletes the account and, with it, its vehicles and their presets. */
         suspend fun removeAccount(account: BBAccount, db: GhostBlueDatabase) {
             db.accounts().delete(account)
@@ -686,6 +725,8 @@ class AccountController(
                 account.password = password
                 account.pin = pin
                 if (refreshToken.isNotEmpty()) account.refreshToken = refreshToken
+                // The app saves credentials only after they signed in.
+                account.rejectedCredentials = null
                 db.accounts().update(account)
             }
         }

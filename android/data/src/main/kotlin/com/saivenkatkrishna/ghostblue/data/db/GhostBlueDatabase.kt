@@ -1,6 +1,7 @@
 package com.saivenkatkrishna.ghostblue.data.db
 
 import android.content.Context
+import androidx.room.AutoMigration
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -21,7 +22,11 @@ import com.saivenkatkrishna.ghostblue.data.model.VehicleAutomation
         BBAccount::class, BBVehicle::class, ClimatePreset::class, ChargeSession::class, TripRecord::class,
         RemoteCommandActivity::class, MaintenanceReminder::class, VehicleAutomation::class, BBHTTPLog::class,
     ],
-    version = 1,
+    version = 2,
+    autoMigrations = [
+        // BBAccount.rejectedCredentials.
+        AutoMigration(from = 1, to = 2),
+    ],
 )
 @TypeConverters(Converters::class)
 abstract class GhostBlueDatabase : RoomDatabase() {

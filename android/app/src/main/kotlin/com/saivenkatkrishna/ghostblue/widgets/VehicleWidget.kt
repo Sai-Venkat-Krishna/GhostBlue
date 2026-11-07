@@ -86,12 +86,12 @@ internal fun widgetStates(context: Context, id: GlanceId, withImage: Boolean): F
         graph.settings.selectedVin,
         graph.settings.distanceUnit,
         graph.settings.theme,
-        WidgetVehicles.configChanges,
-    ) { vehicles, selected, unit, theme, _ ->
+        combine(WidgetVehicles.configChanges, CommandFeedback.all) { _, feedback -> feedback },
+    ) { vehicles, selected, unit, theme, feedback ->
         val appWidgetId = runCatching { GlanceAppWidgetManager(context).getAppWidgetId(id) }.getOrNull()
         val vehicle: BBVehicle? = WidgetVehicles.resolve(vehicles, appWidgetId?.let { WidgetVehicles.pinned(context, it) }, selected)
         WidgetState(
-            vehicle?.let { WidgetVehicle.from(it, unit) },
+            vehicle?.let { WidgetVehicle.from(it, unit).copy(commandText = CommandFeedback.latest(feedback, it.vin)?.text) },
             if (withImage && vehicle != null) loadVehicleBitmap(context, vehicle) else null,
             theme == AppTheme.RIVIAN,
             appWidgetId?.let { WidgetVehicles.accent(context, it) } ?: WidgetAccent.MINT,
@@ -309,8 +309,8 @@ private fun MediumLayout(vehicle: WidgetVehicle, image: Bitmap?) {
             }
             BatteryBar(vehicle)
             Spacer(GlanceModifier.height(4.dp))
-            if (vehicle.isCharging || vehicle.isPluggedIn) ChargingStrip(vehicle, wordy = false)
-            else Caption("${vehicle.odometer} · Updated ${vehicle.updated ?: "--"}")
+            if (vehicle.commandText == null && (vehicle.isCharging || vehicle.isPluggedIn)) ChargingStrip(vehicle, wordy = false)
+            else Caption(vehicle.statusLine)
         }
         Spacer(GlanceModifier.width(10.dp))
         Buttons(vehicle, filled = false)
@@ -323,7 +323,7 @@ private fun LargeLayout(vehicle: WidgetVehicle, image: Bitmap?) {
         Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(GlanceModifier.defaultWeight()) {
                 Title(vehicle.name, 16)
-                Caption("${vehicle.odometer} · Updated ${vehicle.updated ?: "--"}")
+                Caption(vehicle.statusLine)
             }
             RefreshButton(vehicle.vin)
         }

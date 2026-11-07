@@ -172,6 +172,11 @@ class AppSettings(private val prefs: SharedPreferences) {
         prefs.edit().putBoolean(DEBUG_MODE, value).apply()
     }
 
+    /** Whether the app has asked for notifications by itself (once, after the first sign-in). */
+    var notificationPermissionAsked: Boolean
+        get() = prefs.getBoolean(NOTIFICATION_PERMISSION_ASKED, false)
+        set(value) = prefs.edit().putBoolean(NOTIFICATION_PERMISSION_ASKED, value).apply()
+
     fun setShowShortTrips(value: Boolean) {
         _showShortTrips.value = value
         prefs.edit().putString(SHOW_SHORT_TRIPS, if (value) "true" else "false").apply()
@@ -233,6 +238,7 @@ class AppSettings(private val prefs: SharedPreferences) {
         const val APP_THEME = "AppTheme"
         const val APP_REFRESH_INTERVAL = "AppRefreshInterval"
         const val DEBUG_MODE = "DebugModeEnabled"
+        const val NOTIFICATION_PERMISSION_ASKED = "NotificationPermissionAsked"
         const val SHOW_SHORT_TRIPS = "ShowShortTrips"
         const val HIDE_VEHICLE_LOCATION = "HideVehicleLocation"
         const val REDACT_PRIVATE_LOCATIONS = "RedactPrivateLocations"

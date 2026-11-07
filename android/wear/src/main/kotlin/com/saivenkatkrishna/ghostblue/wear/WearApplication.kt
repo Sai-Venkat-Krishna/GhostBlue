@@ -155,8 +155,10 @@ open class WearApplication : Application() {
 
 val Context.wearGraph: WearGraph get() = (applicationContext as WearApplication).graph
 
+/** Logcat, as the phone app: release builds keep only warnings and errors, which leave out the account and URLs. */
 private object LogcatSink : BBLogSink {
     override fun log(level: BBLogLevel, category: BBLogCategory, message: String) {
+        if (!BuildConfig.DEBUG && (level == BBLogLevel.DEBUG || level == BBLogLevel.INFO)) return
         val tag = "GhostBlue/${category.rawValue}"
         when (level) {
             BBLogLevel.DEBUG -> Log.d(tag, message)

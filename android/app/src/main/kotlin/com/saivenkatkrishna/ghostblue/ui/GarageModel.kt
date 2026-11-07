@@ -103,6 +103,9 @@ class GarageModel(
     val commands: StateFlow<Map<Pair<String, CommandKind>, CommandState>> = _commands.asStateFlow()
     private val commandJobs = ConcurrentHashMap<Pair<String, CommandKind>, Job>()
 
+    /** What each control last sent ("lock", "unlock", …), to tell a second tap from the other action. */
+    private val commandActions = ConcurrentHashMap<Pair<String, CommandKind>, String>()
+
     private val _refreshing = MutableStateFlow<Set<String>>(emptySet())
 
     /** VINs with a status refresh in flight. */
@@ -132,6 +135,11 @@ class GarageModel(
 
     /** An account is being added; the onboarding flow stays up until it's done. */
     val signingIn: StateFlow<Boolean> = _signingIn.asStateFlow()
+
+    private val _signInError = MutableStateFlow<UserError?>(null)
+
+    /** Why the last sign-in failed, for a sign-in screen recreated while it ran. */
+    val signInError: StateFlow<UserError?> = _signInError.asStateFlow()
 
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
 
@@ -210,6 +218,12 @@ class GarageModel(
     fun start() {
         if (started) return
         started = true
+        reload()
+    }
+
+    /** Signs in and loads the cars again: Try Again after a failed launch. */
+    fun reload() {
+        if (_garageLoading.value) return
         scope.launch { loadGarage() }
     }
 
@@ -237,14 +251,17 @@ class GarageModel(
         }
     }
 
-    /** While the app is in the foreground: the selected car every refresh interval, when its data is stale. */
+    /**
+     * While the app is in the foreground: the selected car every refresh
+     * interval, when its data is stale. It keeps going after a failure (no
+     * signal when the app opened), so the data catches up on its own; the
+     * reads are the server's snapshot, which doesn't wake the car.
+     */
     suspend fun runAutoRefresh() {
         VehicleRefreshPolicy.run(interval = { settings.refreshInterval.value.seconds }) {
-            if (_lastError.value == null) {
-                selectedVehicle.value?.let { vehicle ->
-                    if (VehicleRefreshPolicy.shouldRefresh(vehicle.lastUpdated, interval = STALE_SECONDS)) {
-                        refresh(vehicle.vin, forced = false)
-                    }
+            selectedVehicle.value?.let { vehicle ->
+                if (VehicleRefreshPolicy.shouldRefresh(vehicle.lastUpdated, interval = STALE_SECONDS)) {
+                    refresh(vehicle.vin, forced = false)
                 }
             }
         }
@@ -314,12 +331,14 @@ class GarageModel(
     /**
      * Sends a command and waits for the car to report the change, as iOS's
      * buttons do. The drawn state always comes from the car's reported
-     * status; this only carries the progress line. Tapping again while a
-     * command waits cancels it.
+     * status; this only carries the progress line. Tapping the same
+     * [action] again while it waits stops waiting; a different one on the
+     * same control (Unlock while Lock waits) is sent in its place.
      */
     private fun runCommand(
         vin: String,
         kind: CommandKind,
+        action: String,
         maxAttempts: Int = 3,
         waitSeconds: Int = commandWaitSeconds,
         timeoutIsSuccess: Boolean = false,
@@ -331,12 +350,13 @@ class GarageModel(
         if (previous != null && previous.isActive) {
             val waiting = _commands.value[key]?.running == true
             previous.cancel()
-            if (waiting) {
+            if (waiting && commandActions[key] == action) {
                 _commands.update { it - key }
                 return
             }
-            // It had failed and was only showing why: this tap sends it again.
+            // It had failed and was only showing why, or it was the other action: this tap sends.
         }
+        commandActions[key] = action
         val job = scope.launch {
             fun set(state: CommandState?) = _commands.update { if (state == null) it - key else it + (key to state) }
             set(CommandState(running = true, message = "Sending command..."))
@@ -375,11 +395,11 @@ class GarageModel(
         if (vehicle.lockStatus == VehicleStatus.LockStatus.LOCKED) unlock(vehicle.vin) else lock(vehicle.vin)
     }
 
-    fun lock(vin: String) = runCommand(vin, CommandKind.LOCK, send = { it.lockVehicle(vin) }) {
+    fun lock(vin: String) = runCommand(vin, CommandKind.LOCK, "lock", send = { it.lockVehicle(vin) }) {
         it.lockStatus == VehicleStatus.LockStatus.LOCKED
     }
 
-    fun unlock(vin: String) = runCommand(vin, CommandKind.LOCK, send = { it.unlockVehicle(vin) }) {
+    fun unlock(vin: String) = runCommand(vin, CommandKind.LOCK, "unlock", send = { it.unlockVehicle(vin) }) {
         it.lockStatus == VehicleStatus.LockStatus.UNLOCKED
     }
 
@@ -391,6 +411,7 @@ class GarageModel(
     fun startClimate(vin: String, preset: ClimatePreset? = null) = runCommand(
         vin,
         CommandKind.CLIMATE,
+        "startClimate",
         send = { controller ->
             if (preset != null) {
                 controller.startClimate(vin, preset.climateOptions, preset.name, preset.iconName)
@@ -400,7 +421,7 @@ class GarageModel(
         },
     ) { it.climateStatus.airControlOn }
 
-    fun stopClimate(vin: String) = runCommand(vin, CommandKind.CLIMATE, send = { it.stopClimate(vin) }) {
+    fun stopClimate(vin: String) = runCommand(vin, CommandKind.CLIMATE, "stopClimate", send = { it.stopClimate(vin) }) {
         !it.climateStatus.airControlOn
     }
 
@@ -409,6 +430,7 @@ class GarageModel(
         runCommand(
             vehicle.vin,
             CommandKind.CHARGE,
+            if (shouldStart) "startCharge" else "stopCharge",
             send = { if (shouldStart) it.startCharge(vehicle.vin) else it.stopCharge(vehicle.vin) },
         ) { it.evStatus?.charging == shouldStart }
     }
@@ -417,6 +439,7 @@ class GarageModel(
     fun setChargeLimits(vin: String, ac: Int, dc: Int) = runCommand(
         vin,
         CommandKind.CHARGE_LIMITS,
+        "chargeLimits:$ac:$dc",
         waitSeconds = minOf(5, commandWaitSeconds),
         timeoutIsSuccess = true,
         send = { it.setTargetSOC(vin, ac, dc) },
@@ -438,13 +461,22 @@ class GarageModel(
         region: Region,
         testCars: List<FakeVehicleRecord> = emptyList(),
     ): UserError? {
-        // Runs in the app's scope: the sign-in screen leaves composition when the account row appears.
+        // Runs in the app's scope, and [signingIn] and [signInError] follow it rather than the caller:
+        // the sign-in screen leaves composition when the account row appears, and is recreated when
+        // the phone rotates or folds.
         _signingIn.value = true
-        return try {
-            scope.async { performSignIn(username, password, pin, brand, region, testCars) }.await()
-        } finally {
-            _signingIn.value = false
-        }
+        _signInError.value = null
+        return scope.async {
+            try {
+                performSignIn(username, password, pin, brand, region, testCars).also { _signInError.value = it }
+            } finally {
+                _signingIn.value = false
+            }
+        }.await()
+    }
+
+    fun dismissSignInError() {
+        _signInError.value = null
     }
 
     private suspend fun performSignIn(

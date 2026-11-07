@@ -60,6 +60,7 @@ class RefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorke
         private const val UNIQUE_NAME = "background-refresh"
         private const val KEY_FORCED = "forced"
         private const val LIVE_PROGRESS_SECONDS = 300.0
+        private const val MIN_DELAY_SECONDS = 60.0
 
         /** Seconds until the next refresh: the owner's interval, shortened to ten minutes while any car is plugged in. */
         fun nextDelaySeconds(vehicles: List<BBVehicle>, interval: WidgetRefreshInterval): Double {
@@ -68,9 +69,22 @@ class RefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorke
         }
 
         /**
-         * Replaces the pending refresh with one after the current interval.
-         * A refresh that's running is left to finish: it schedules the next
-         * one itself ([fromWorker]), and replacing it would cancel its reads.
+         * Seconds until a refresh is due: [interval] after the stalest car's
+         * last update, but at least a minute away. Counting from the update
+         * rather than from now keeps the app's every start (a tile, an
+         * alarm, the owner opening it) from pushing the refresh back.
+         */
+        fun dueInSeconds(vehicles: List<BBVehicle>, interval: Double, now: Instant = Instant.now()): Double {
+            val oldest = vehicles.filter { !it.isHidden }.map { it.lastUpdated ?: Instant.EPOCH }.minOrNull() ?: return interval
+            val age = (now.toEpochMilli() - oldest.toEpochMilli()) / 1000.0
+            return (interval - age).coerceIn(minOf(MIN_DELAY_SECONDS, interval), interval)
+        }
+
+        /**
+         * Replaces the pending refresh with one when the next is due. A
+         * refresh that's running is left to finish: it schedules the next
+         * one itself ([fromWorker]), a whole interval on, even for a car it
+         * couldn't read, and replacing it would cancel its reads.
          */
         suspend fun schedule(context: Context, fromWorker: Boolean = false) {
             val graph = (context.applicationContext as GhostBlueApplication).graph
@@ -82,9 +96,11 @@ class RefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorke
             if (!fromWorker && workManager.getWorkInfosForUniqueWorkFlow(UNIQUE_NAME).first().any { it.state == WorkInfo.State.RUNNING }) {
                 return
             }
-            var delay = nextDelaySeconds(graph.db.vehicles().all(), graph.settings.widgetRefreshInterval.value)
+            val vehicles = graph.db.vehicles().all()
+            var delay = nextDelaySeconds(vehicles, graph.settings.widgetRefreshInterval.value)
             // The charging notification is kept current every five minutes, as iOS's wake-ups do.
             if (graph.chargingProgress.anyCharging()) delay = minOf(delay, LIVE_PROGRESS_SECONDS)
+            if (!fromWorker) delay = dueInSeconds(vehicles, delay)
             enqueue(context, delay.toLong(), forced = false)
         }
 

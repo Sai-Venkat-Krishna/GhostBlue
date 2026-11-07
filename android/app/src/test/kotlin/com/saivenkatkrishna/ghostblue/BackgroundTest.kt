@@ -33,6 +33,7 @@ import com.saivenkatkrishna.ghostblue.settings.AppSettings
 import com.saivenkatkrishna.ghostblue.settings.WidgetRefreshInterval
 import com.saivenkatkrishna.ghostblue.ui.components.Format
 import com.saivenkatkrishna.ghostblue.widgets.CommandCenter
+import com.saivenkatkrishna.ghostblue.widgets.CommandFeedback
 import com.saivenkatkrishna.ghostblue.widgets.WidgetAccent
 import com.saivenkatkrishna.ghostblue.widgets.WovenArt
 import com.saivenkatkrishna.ghostblue.widgets.WovenContent
@@ -98,6 +99,11 @@ class BackgroundTest {
         assertTrue(worker.doWork() is ListenableWorker.Result.Success)
         assertEquals(VehicleStatus.LockStatus.UNLOCKED, graph.db.vehicles().byVin(vin)!!.lockStatus)
         assertTrue(graph.db.remoteCommands().all().any { it.commandName == "Unlock" })
+        // The widgets and tiles show the result too, for when notifications aren't allowed.
+        assertEquals("Unlocked", CommandFeedback.forControl(vin, RemoteAction.UNLOCK.control)?.text)
+        val widget = WidgetVehicle.from(firstVehicle(), Distance.Units.MILES)
+        assertEquals("Unlocked", widget.copy(commandText = CommandFeedback.latest(CommandFeedback.all.value, vin)?.text).statusLine)
+        assertTrue(widget.statusLine.contains("Updated"))
     }
 
     private fun command(vin: String, action: RemoteAction, enqueuedAt: Long = System.currentTimeMillis()) = workDataOf(
@@ -115,6 +121,7 @@ class BackgroundTest {
         assertTrue(worker.doWork() is ListenableWorker.Result.Failure)
         assertEquals(VehicleStatus.LockStatus.LOCKED, graph.db.vehicles().byVin(vin)!!.lockStatus)
         assertTrue(graph.db.remoteCommands().all().none { it.commandName == "Unlock" })
+        assertTrue(CommandFeedback.forControl(vin, RemoteAction.UNLOCK.control)!!.text.startsWith("Not sent"))
     }
 
     @Test fun lockAndClimateFromWidgetsDontReplaceEachOther() {
@@ -147,6 +154,17 @@ class BackgroundTest {
         val parked = BBVehicle()
         assertEquals(4 * 3600.0, RefreshWorker.nextDelaySeconds(listOf(parked), WidgetRefreshInterval.FOUR_HOURS), 0.0)
         assertEquals(600.0, RefreshWorker.nextDelaySeconds(listOf(parked, plugged), WidgetRefreshInterval.FOUR_HOURS), 0.0)
+    }
+
+    @Test fun theAppStartingDoesNotPushTheRefreshBack() {
+        fun car(updatedSecondsAgo: Long?) = BBVehicle().apply { lastUpdated = updatedSecondsAgo?.let { now.minusSeconds(it) } }
+        val interval = 4 * 3600.0
+        // Counted from the stalest car's update, not from when the app last started.
+        assertEquals(interval - 3600, RefreshWorker.dueInSeconds(listOf(car(600), car(3600)), interval, now), 0.0)
+        // Overdue, or never read: soon, but not straight away.
+        assertEquals(60.0, RefreshWorker.dueInSeconds(listOf(car(5 * 3600)), interval, now), 0.0)
+        assertEquals(60.0, RefreshWorker.dueInSeconds(listOf(car(null)), interval, now), 0.0)
+        assertEquals(interval, RefreshWorker.dueInSeconds(emptyList(), interval, now), 0.0)
     }
 
     @Test fun smartChargingIsScheduledJustAfterTheNextBoundary() = runTest {

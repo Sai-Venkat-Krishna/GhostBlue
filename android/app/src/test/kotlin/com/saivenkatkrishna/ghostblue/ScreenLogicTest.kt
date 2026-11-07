@@ -9,6 +9,7 @@ import com.saivenkatkrishna.ghostblue.kit.model.Distance
 import com.saivenkatkrishna.ghostblue.kit.model.EVTripDetail
 import com.saivenkatkrishna.ghostblue.kit.model.FuelType
 import com.saivenkatkrishna.ghostblue.kit.model.VehicleStatus
+import com.saivenkatkrishna.ghostblue.ui.components.Format
 import com.saivenkatkrishna.ghostblue.ui.components.VehicleImages
 import com.saivenkatkrishna.ghostblue.ui.energy.ChargeHistoryRange
 import com.saivenkatkrishna.ghostblue.ui.energy.ChargeHistorySummary
@@ -53,6 +54,15 @@ class ScreenLogicTest {
     )
 
     // MARK: - Car image
+
+    @Test fun widgetUpdateTimesSayTheDayWhenItIsNotToday() {
+        fun updated(secondsAgo: Long) = Format.updatedTime(now.minusSeconds(secondsAgo), now, zone)
+        val time = Format.time(now.minusSeconds(3600), zone)
+        assertEquals(time, updated(3600))
+        assertEquals("${Format.time(now.minusSeconds(86_400), zone)} yesterday", updated(86_400))
+        assertTrue(updated(3 * 86_400).startsWith(Format.time(now.minusSeconds(3 * 86_400), zone) + " "))
+        assertEquals(Format.pattern(now.minusSeconds(20 * 86_400), "MMM d", zone), updated(20 * 86_400))
+    }
 
     @Test fun vehicleImageURLMatchesIOS() {
         assertEquals("https://bluelink.andyfase.com/app-assets/car-images//ioniq5/white.png", VehicleImages.url("Hyundai IONIQ 5", VehicleImageColor.WHITE))

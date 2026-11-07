@@ -199,7 +199,9 @@ private fun SpecTopBar(vehicle: WidgetVehicle) {
             Text(vehicle.odometer, style = caption, maxLines = 1)
         }
         Spacer(GlanceModifier.defaultWeight())
-        vehicle.updated?.let { Text("Updated $it", style = caption.copy(color = Spec.white(0.55f)), maxLines = 1) }
+        (vehicle.commandText ?: vehicle.updated?.let { "Updated $it" })?.let {
+            Text(it, style = caption.copy(color = Spec.white(if (vehicle.commandText != null) 0.9f else 0.55f)), maxLines = 1)
+        }
         Spacer(GlanceModifier.defaultWeight())
         Image(
             ImageProvider(R.drawable.ic_refresh),
@@ -473,7 +475,7 @@ private fun RivianHeader(vehicle: WidgetVehicle) {
     Row(GlanceModifier.fillMaxWidth().height(Rivian.header), verticalAlignment = Alignment.Top) {
         Column(GlanceModifier.defaultWeight()) {
             Text(vehicle.name, style = TextStyle(color = Rivian.ink, fontSize = 15.sp, fontWeight = FontWeight.Bold), maxLines = 1)
-            Text(listOfNotNull(rivianStatusLine(vehicle), vehicle.updated).joinToString(" · "), style = TextStyle(color = tint, fontSize = 12.sp, fontWeight = FontWeight.Medium), maxLines = 1)
+            Text(vehicle.commandText ?: listOfNotNull(rivianStatusLine(vehicle), vehicle.updated).joinToString(" · "), style = TextStyle(color = tint, fontSize = 12.sp, fontWeight = FontWeight.Medium), maxLines = 1)
         }
         Spacer(GlanceModifier.width(8.dp))
         Box(

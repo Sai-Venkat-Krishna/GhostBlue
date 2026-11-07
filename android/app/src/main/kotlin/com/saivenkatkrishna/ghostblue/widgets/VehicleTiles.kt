@@ -30,11 +30,20 @@ abstract class VehicleTileService : TileService() {
 
     abstract fun look(vehicle: BBVehicle?): TileLook
 
+    /** The [RemoteAction.control] the tile sends. */
+    abstract val control: String
+
     private suspend fun vehicle(): BBVehicle? =
         WidgetVehicles.resolve(graph.db.vehicles().all(), pinned = null, selected = graph.settings.selectedVin.value)
 
     override fun onStartListening() {
-        graph.scope.launch { render(look(vehicle())) }
+        graph.scope.launch {
+            val vehicle = vehicle()
+            val look = look(vehicle)
+            // A command's progress or failure, which otherwise shows only as a notification.
+            val feedback = vehicle?.let { CommandFeedback.forControl(it.vin, control) }
+            render(if (feedback != null) look.copy(subtitle = feedback.text) else look)
+        }
     }
 
     override fun onClick() {
@@ -67,14 +76,17 @@ abstract class VehicleTileService : TileService() {
 }
 
 class LockTileService : VehicleTileService() {
+    override val control = RemoteAction.LOCK.control
     override fun look(vehicle: BBVehicle?): TileLook = lockTileLook(vehicle)
 }
 
 class ClimateTileService : VehicleTileService() {
+    override val control = RemoteAction.START_CLIMATE.control
     override fun look(vehicle: BBVehicle?): TileLook = climateTileLook(vehicle)
 }
 
 class ChargeTileService : VehicleTileService() {
+    override val control = RemoteAction.START_CHARGE.control
     override fun look(vehicle: BBVehicle?): TileLook = chargeTileLook(vehicle)
 }
 

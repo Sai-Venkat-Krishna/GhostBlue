@@ -88,6 +88,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -126,12 +129,47 @@ sealed interface SettingsRoute {
     data object HttpLogs : SettingsRoute
     data class HttpLog(val id: UUID) : SettingsRoute
     data object About : SettingsRoute
+
+    /** How the route is saved across rotating, folding and process death. */
+    val key: String
+        get() = when (this) {
+            Root -> "root"
+            AddAccount -> "addAccount"
+            is Account -> "account:$id"
+            is Vehicle -> "vehicle:$vin"
+            Backup -> "backup"
+            HttpLogs -> "httpLogs"
+            is HttpLog -> "httpLog:$id"
+            About -> "about"
+        }
+
+    companion object {
+        fun fromKey(key: String): SettingsRoute? {
+            val value = key.substringAfter(':', "")
+            return when (key.substringBefore(':')) {
+                "root" -> Root
+                "addAccount" -> AddAccount
+                "account" -> runCatching { Account(UUID.fromString(value)) }.getOrNull()
+                "vehicle" -> Vehicle(value)
+                "backup" -> Backup
+                "httpLogs" -> HttpLogs
+                "httpLog" -> runCatching { HttpLog(UUID.fromString(value)) }.getOrNull()
+                "about" -> About
+                else -> null
+            }
+        }
+
+        val stackSaver = listSaver<SnapshotStateList<SettingsRoute>, String>(
+            save = { stack -> stack.map { it.key } },
+            restore = { keys -> mutableStateListOf<SettingsRoute>(Root).apply { addAll(keys.mapNotNull(::fromKey).filter { it != Root }) } },
+        )
+    }
 }
 
 /** Settings and the screens under it, on a Navigation 3 back stack. */
 @Composable
 fun SettingsTab(incomingBackup: MutableStateFlow<Uri?>) {
-    val stack = remember { mutableStateListOf<SettingsRoute>(SettingsRoute.Root) }
+    val stack = rememberSaveable(saver = SettingsRoute.stackSaver) { mutableStateListOf<SettingsRoute>(SettingsRoute.Root) }
     val pending by incomingBackup.collectAsStateWithLifecycle()
     LaunchedEffect(pending) {
         if (pending != null && stack.lastOrNull() != SettingsRoute.Backup) stack += SettingsRoute.Backup
@@ -187,7 +225,8 @@ private fun SettingsRoot(onOpen: (SettingsRoute) -> Unit) {
                 Column(Modifier.widthIn(max = 720.dp)) {
                     Section("Accounts")
                     accounts.orEmpty().forEach { account ->
-                        NavRow(account.username, account.brandEnum.displayName, Icons.Rounded.AccountCircle) { onOpen(SettingsRoute.Account(account.id)) }
+                        val subtitle = if (account.rejectedCredentials != null) "Password refused · tap to update" else account.brandEnum.displayName
+                        NavRow(account.username, subtitle, Icons.Rounded.AccountCircle) { onOpen(SettingsRoute.Account(account.id)) }
                     }
                     NavRow("Add account", null, Icons.Rounded.Add, tag = "addAccount") { onOpen(SettingsRoute.AddAccount) }
 
@@ -397,6 +436,15 @@ private fun AccountScreen(id: UUID, onBack: () -> Unit) {
             ListItem(headlineContent = { Text("Brand") }, supportingContent = { Text(account.brandEnum.displayName) }, colors = transparentListColors())
             ListItem(headlineContent = { Text("Region") }, supportingContent = { Text(account.regionEnum.displayName) }, colors = transparentListColors())
             Section("Credentials")
+            if (account.rejectedCredentials != null) {
+                Text(
+                    "${account.brandEnum.displayName} refused the saved password, so GhostBlue has stopped signing in. " +
+                        "Enter the current password to start again.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).testTag("passwordRefused"),
+                )
+            }
             ListItem(headlineContent = { Text("Change password") }, modifier = Modifier.clickable { editing = "password" }, colors = transparentListColors())
             if (account.brandEnum != Brand.KIA && account.brandEnum != Brand.FAKE) {
                 ListItem(headlineContent = { Text("Change PIN") }, modifier = Modifier.clickable { editing = "pin" }, colors = transparentListColors())

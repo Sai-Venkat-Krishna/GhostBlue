@@ -3,6 +3,7 @@ package com.saivenkatkrishna.ghostblue
 import android.app.Application
 import android.content.Context
 import android.util.Log
+import com.saivenkatkrishna.ghostblue.data.account.AccountAlerts
 import com.saivenkatkrishna.ghostblue.data.account.AccountControllers
 import com.saivenkatkrishna.ghostblue.data.account.HTTPLogSinkManager
 import com.saivenkatkrishna.ghostblue.data.db.GhostBlueDatabase
@@ -84,6 +85,7 @@ class AppGraph(
     fun startBackgroundWork() {
         notifier.createChannels()
         VehicleAlerts.sink = notifier
+        AccountAlerts.sink = notifier
         WatchHandoff.start(context, db, scope)
         scope.launch {
             VehicleStatusEvents.statusUpdated.collect { vin -> chargingProgress.update(vin) }
@@ -144,9 +146,14 @@ open class GhostBlueApplication : Application() {
     protected open fun startBackgroundWork() = graph.startBackgroundWork()
 }
 
-/** Sends the vehicle API's log lines to Logcat under "GhostBlue/<category>". */
+/**
+ * Sends the vehicle API's log lines to Logcat under "GhostBlue/<category>".
+ * Release builds keep only warnings and errors: the rest names the account,
+ * its cars and every URL requested, and ends up in bug reports.
+ */
 private object LogcatSink : BBLogSink {
     override fun log(level: BBLogLevel, category: BBLogCategory, message: String) {
+        if (!BuildConfig.DEBUG && (level == BBLogLevel.DEBUG || level == BBLogLevel.INFO)) return
         val tag = "GhostBlue/${category.rawValue}"
         when (level) {
             BBLogLevel.DEBUG -> Log.d(tag, message)

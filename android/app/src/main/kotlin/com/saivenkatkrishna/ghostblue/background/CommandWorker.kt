@@ -19,9 +19,12 @@ import com.saivenkatkrishna.ghostblue.GhostBlueApplication
 import com.saivenkatkrishna.ghostblue.notifications.Channel
 import com.saivenkatkrishna.ghostblue.notifications.Notifier
 import com.saivenkatkrishna.ghostblue.ui.commandErrorMessage
+import com.saivenkatkrishna.ghostblue.widgets.CommandFeedback
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -42,23 +45,38 @@ class CommandWorker(context: Context, params: WorkerParameters) : CoroutineWorke
         val notifier = graph.notifier
         val tag = "$vin:command:${action.control}"
 
+        // The notification, and the same line on the widgets and tiles, which show it even when notifications aren't allowed.
         fun show(text: String, ongoing: Boolean) {
             notifier.notify(tag, progressNotification(name, action, text, ongoing), Notifier.COMMAND_ID)
+            CommandFeedback.show(vin, action, text, running = ongoing)
+        }
+
+        // A result stays up as long as its notification does.
+        suspend fun finish(text: String) {
+            show(text, ongoing = false)
+            val shown = CommandFeedback.forControl(vin, action.control)
+            graph.refreshWidgets()
+            graph.scope.launch {
+                delay(RESULT_TIMEOUT_MILLIS)
+                shown?.let { CommandFeedback.clear(vin, it) }
+                graph.refreshWidgets()
+            }
         }
 
         // Work out of expedited quota, or re-run after the process died, can start much later:
         // the car may have changed since, so an old tap isn't sent.
         val enqueuedAt = inputData.getLong(KEY_ENQUEUED_AT, 0)
         if (System.currentTimeMillis() - enqueuedAt > EXPIRY_MILLIS) {
-            show("Not sent: it waited too long. Tap again to send it.", ongoing = false)
+            finish("Not sent: it waited too long. Tap again to send it.")
             return Result.failure()
         }
 
         return try {
             setForegroundSafely(name, action)
-            controller.perform(vin, action, graph.commandWaitSeconds) { show(it, ongoing = true) }
-            show(action.done, ongoing = false)
+            show("${action.progress}…", ongoing = true)
             graph.refreshWidgets()
+            controller.perform(vin, action, graph.commandWaitSeconds) { show(it, ongoing = true) }
+            finish(action.done)
             Result.success()
         } catch (error: CancellationException) {
             withContext(NonCancellable) {
@@ -66,15 +84,15 @@ class CommandWorker(context: Context, params: WorkerParameters) : CoroutineWorke
                 val replaced = WorkManager.getInstance(applicationContext)
                     .getWorkInfosForUniqueWorkFlow(uniqueName(vin, action)).first()
                     .any { it.id != id && !it.state.isFinished }
-                if (!replaced) notifier.cancel(tag, Notifier.COMMAND_ID)
+                if (!replaced) {
+                    notifier.cancel(tag, Notifier.COMMAND_ID)
+                    CommandFeedback.forControl(vin, action.control)?.let { CommandFeedback.clear(vin, it) }
+                    graph.refreshWidgets()
+                }
             }
             throw error
         } catch (error: Exception) {
-            show(
-                if (error.isUnconfirmed) "Sent, but the car hasn't confirmed yet." else commandErrorMessage(error),
-                ongoing = false,
-            )
-            graph.refreshWidgets()
+            finish(if (error.isUnconfirmed) "Sent, but the car hasn't confirmed yet." else commandErrorMessage(error))
             Result.failure()
         }
     }

@@ -106,7 +106,12 @@ data class WidgetVehicle(
     /** While plugged in and not charging: "Plugged in · not charging", "Scheduled pause"... */
     val chargingTitle: String = "",
     val remainingSeconds: Long = 0,
+    /** A widget or tile command's progress or result ([CommandFeedback]), shown in place of the update time. */
+    val commandText: String? = null,
 ) {
+    /** The odometer and when the data is from, unless a command has something to say. */
+    val statusLine: String get() = commandText ?: "$odometer · Updated ${updated ?: "--"}"
+
     companion object {
         fun from(vehicle: BBVehicle, unit: Distance.Units, now: Instant = Instant.now()): WidgetVehicle {
             val ev = vehicle.evStatus
@@ -142,7 +147,7 @@ data class WidgetVehicle(
                 remaining = ev?.chargeTimeSeconds?.takeIf { it > 0 }?.let { Format.duration(it.toDouble()) },
                 finish = finish?.let { Format.finishTime(it, now) },
                 odometer = Format.distance(vehicle.odometer, unit),
-                updated = vehicle.lastUpdated?.let { Format.time(it) },
+                updated = vehicle.lastUpdated?.let { Format.updatedTime(it, now) },
                 updatedAt = vehicle.lastUpdated,
                 chargingTitle = vehicle.chargingDisplayState(now).title,
                 remainingSeconds = ev?.chargeTimeSeconds ?: 0,

@@ -13,7 +13,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -49,8 +49,8 @@ fun GhostBlueApp(
     val garage = graph.garage
     val accounts by garage.accounts.collectAsStateWithLifecycle()
     val signingIn by garage.signingIn.collectAsStateWithLifecycle()
-    // Onboarding stays until a sign-in it started has finished loading the cars.
-    var onboarding by remember { mutableStateOf(false) }
+    // Onboarding stays until a sign-in it started has finished loading the cars, across rotating and folding too.
+    var onboarding by rememberSaveable { mutableStateOf(false) }
     val current = accounts
     if (current != null && current.isEmpty()) onboarding = true
     if (current != null && current.isNotEmpty() && !signingIn) onboarding = false

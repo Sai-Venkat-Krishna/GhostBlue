@@ -36,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,7 +77,7 @@ fun HomeScreen(reselection: Int, onNavigate: (Destination) -> Unit) {
 
     val vehicle = selected
     if (vehicle == null) {
-        EmptyGarage(loading = loading || vehicles == null, error = lastError, onRetry = { garage.start(); garage.dismissError() })
+        EmptyGarage(loading = loading || vehicles == null, error = lastError, onRetry = { garage.dismissError(); garage.reload() })
         return
     }
 
@@ -85,7 +86,7 @@ fun HomeScreen(reselection: Int, onNavigate: (Destination) -> Unit) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val scroll = rememberScrollState()
     LaunchedEffect(reselection) { if (reselection > 0) scroll.animateScrollTo(0) }
-    var sheet by remember { mutableStateOf<HomeSheet?>(null) }
+    var sheet by rememberSaveable { mutableStateOf<HomeSheet?>(null) }
     val isRefreshing = vehicle.vin in refreshing
 
     Scaffold(

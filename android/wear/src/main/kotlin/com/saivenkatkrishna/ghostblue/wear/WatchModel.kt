@@ -91,6 +91,16 @@ class WatchModel(
         if (VehicleRefreshPolicy.shouldRefresh(vehicle.lastUpdated, interval = STALE_SECONDS)) refresh(vin, forced = false)
     }
 
+    /**
+     * For the tile and complications, which the system asks for on its own
+     * schedule: the server's snapshot when the car's data is half an hour
+     * old, so a watch face doesn't keep the charge from the last time the
+     * app was opened. Applying the status redraws them.
+     */
+    fun refreshForSurfaces(vehicle: BBVehicle) {
+        if (VehicleRefreshPolicy.shouldRefresh(vehicle.lastUpdated, interval = SURFACE_STALE_SECONDS)) refresh(vehicle.vin, forced = false)
+    }
+
     fun refresh(vin: String, forced: Boolean) {
         if (vin in _refreshing.value) return
         scope.launch {
@@ -211,6 +221,7 @@ class WatchModel(
 
     companion object {
         const val STALE_SECONDS = 300.0
+        const val SURFACE_STALE_SECONDS = 1800.0
         const val RESULT_MILLIS = 3_000L
     }
 }

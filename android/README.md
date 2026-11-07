@@ -109,7 +109,9 @@ phases, all of them in this folder.
 
   Where Android differs from iOS: smart charging posts what it changed
   (iOS shows it only in Shortcuts); widget and tile commands wait for the
-  car and show progress, where iOS's intents only send; there are no lock
+  car and show progress on the widget or tile and in a notification, where
+  iOS's intents only send; widgets add the day to an update time that isn't
+  today's; there are no lock
   screen widgets or Dynamic Island. Each car's alert rules and its
   low-battery, unplugged and precondition automations are in Settings ›
   Vehicles.
@@ -161,6 +163,12 @@ Where the data layer differs from iOS:
   step, rather than holding a model object, so a change made elsewhere (a
   screen, the test car's server) is never overwritten by a stale copy.
 - Alerts go to `VehicleAlerts.sink`; the app installs its notifier there.
+- A password the service refuses isn't tried again until it changes or the
+  owner re-enters it (`BBAccount.rejectedCredentials`, a digest), and the app
+  notifies once. iOS keeps retrying it from every refresh, which can get the
+  account locked.
+- The database has a version history: schemas are exported to
+  `data/schemas`, and `DatabaseMigrationTest` opens each old version.
 
 ## Build and test
 

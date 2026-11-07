@@ -41,7 +41,10 @@ internal fun HyundaiUSAAPIClient.parseLoginResponse(data: ByteArray): AuthToken 
     val refreshToken = json?.string("refresh_token")
     val expiresIn = json?.string("expires_in")?.toIntOrNull()
     if (accessToken == null || refreshToken == null || expiresIn == null) {
-        throw APIError.logError("Invalid login response: ${data.decodeToString()}", apiName = apiName)
+        // Unlike Swift, without the body: a reply with one field in a new format still carries live tokens,
+        // and this message reaches the screen, Logcat and the command log in backups. Its field names say enough.
+        val fields = json?.keys?.sorted()?.joinToString(", ")
+        throw APIError.logError("Invalid login response" + (fields?.let { " (fields: $it)" } ?: ""), apiName = apiName)
     }
     BBLogger.info(BBLogCategory.AUTH, "HyundaiUSA: Login successful")
     return AuthToken(accessToken, refreshToken, Instant.now().plusSeconds(expiresIn.toLong()))

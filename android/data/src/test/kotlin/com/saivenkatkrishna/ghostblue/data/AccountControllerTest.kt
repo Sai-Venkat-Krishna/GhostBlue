@@ -1,5 +1,7 @@
 package com.saivenkatkrishna.ghostblue.data
 
+import com.saivenkatkrishna.ghostblue.data.account.AccountAlertSink
+import com.saivenkatkrishna.ghostblue.data.account.AccountAlerts
 import com.saivenkatkrishna.ghostblue.data.account.AccountController
 import com.saivenkatkrishna.ghostblue.data.account.HTTPLogSinkManager
 import com.saivenkatkrishna.ghostblue.data.account.SwiftAuthToken
@@ -27,6 +29,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
@@ -155,6 +158,58 @@ class AccountControllerTest {
         assertEquals(APIError.ErrorType.REQUIRES_MFA, first.errorType)
         assertSame(first, second)
         assertEquals(1, client.logins)
+    }
+
+    @Test fun aRefusedPasswordIsNotTriedAgainUntilItChanges() = runTest {
+        val alerted = mutableListOf<UUID>()
+        AccountAlerts.sink = AccountAlertSink { alerted += it.id }
+        try {
+            client.loginFailure = APIError.invalidCredentials("Authentication expired: {\"errorCode\":\"invalid_grant\"}")
+            runCatching { controller().initialize() }
+            assertEquals(1, client.logins)
+            assertEquals(listOf(account.id), alerted)
+            val stored = db.accounts().byId(account.id)!!
+            assertNotNull(stored.rejectedCredentials)
+            assertFalse("Only a digest is kept", stored.rejectedCredentials!!.contains("secret"))
+
+            // Later runs (a refresh worker, a widget, smart charging) don't ask the server again.
+            val again = runCatching { controller().initialize() }.exceptionOrNull() as APIError
+            assertEquals(APIError.ErrorType.INVALID_CREDENTIALS, again.errorType)
+            assertEquals(AccountController.LOGIN_REJECTED_MESSAGE, again.message)
+            runCatching { controller().fetchVehicleStatus("VIN1") }
+            assertEquals(1, client.logins)
+            assertEquals(1, alerted.size)
+
+            // A new password (from the phone, or typed in Settings) is tried, and clears the mark.
+            client.loginFailure = null
+            db.accounts().update(db.accounts().byId(account.id)!!.apply { password = "new-secret" })
+            controller().initialize()
+            assertEquals(2, client.logins)
+            assertNull(db.accounts().byId(account.id)!!.rejectedCredentials)
+        } finally {
+            AccountAlerts.sink = AccountAlertSink { }
+        }
+    }
+
+    @Test fun reenteringTheSamePasswordAfterItSignsInClearsTheMark() = runTest {
+        client.loginFailure = APIError("HTTP 400: bad request", code = 400)
+        runCatching { controller().initialize() }
+        assertNotNull(db.accounts().byId(account.id)!!.rejectedCredentials)
+
+        // Settings saves credentials only after a login of its own with them succeeded.
+        AccountController.updateAccount(account.id, "secret", "1234", db = db)
+        client.loginFailure = null
+        controller().initialize()
+        assertEquals(2, client.logins)
+    }
+
+    @Test fun anUnreachableOrBusyServerDoesNotMarkThePasswordRefused() = runTest {
+        for (failure in listOf(APIError("Network error: offline"), APIError.serverError(), APIError("HTTP 429", code = 429))) {
+            client.loginFailure = failure
+            runCatching { controller().initialize() }
+            assertNull(failure.message, db.accounts().byId(account.id)!!.rejectedCredentials)
+        }
+        assertEquals(3, client.logins)
     }
 
     @Test fun commandsAreLoggedWithTheirOutcome() = runTest {

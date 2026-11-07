@@ -207,10 +207,11 @@ class HyundaiUSAParsingTest {
         assertTrue(token.expiresAt >= before.plusSeconds(1799) && token.expiresAt <= Instant.now().plusSeconds(1799))
         assertTrue(token.isValid)
 
-        // expires_in must be a string, as Hyundai sends it.
-        assertFailsWith<APIError> {
-            client.parseLoginResponse("""{"access_token":"a","refresh_token":"r","expires_in":1799}""".toByteArray())
+        // expires_in must be a string, as Hyundai sends it. The error names the fields, never the tokens.
+        val error = assertFailsWith<APIError> {
+            client.parseLoginResponse("""{"access_token":"live-access","refresh_token":"live-refresh","expires_in":1799}""".toByteArray())
         }
+        assertEquals("Invalid login response (fields: access_token, expires_in, refresh_token)", error.message)
     }
 
     @Test

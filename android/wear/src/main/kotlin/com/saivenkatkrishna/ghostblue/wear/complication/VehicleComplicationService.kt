@@ -50,6 +50,8 @@ class VehicleComplicationService : SuspendingComplicationDataSourceService() {
         val graph = applicationContext.wearGraph
         val vehicles = graph.db.vehicles().all().filter { !it.isHidden }
         val vehicle = vehicles.firstOrNull { it.vin == graph.settings.selectedVin.value } ?: vehicles.firstOrNull()
+        // Asked for every half hour: old data is read again, and the new status redraws the complication.
+        vehicle?.let(graph.model::refreshForSurfaces)
         return data(this, request.complicationType, ComplicationContent.from(vehicle, graph.settings.distanceUnit.value))
     }
 

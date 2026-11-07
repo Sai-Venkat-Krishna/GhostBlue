@@ -22,6 +22,7 @@ import com.saivenkatkrishna.ghostblue.kit.model.VehicleStatus
 import com.saivenkatkrishna.ghostblue.wear.complication.ComplicationContent
 import com.saivenkatkrishna.ghostblue.wear.complication.VehicleComplicationService
 import com.saivenkatkrishna.ghostblue.wear.tile.VehicleTileService
+import com.saivenkatkrishna.ghostblue.wear.tile.staleAge
 import com.saivenkatkrishna.ghostblue.wear.tile.tileContent
 import com.saivenkatkrishna.ghostblue.wear.ui.WearApp
 import java.util.UUID
@@ -157,6 +158,15 @@ class WearTest {
         lockStatus = if (locked) VehicleStatus.LockStatus.LOCKED else VehicleStatus.LockStatus.UNLOCKED
         climateStatus = VehicleStatus.ClimateStatus(false, climate, false, com.saivenkatkrishna.ghostblue.kit.model.Temperature(70.0, com.saivenkatkrishna.ghostblue.kit.model.Temperature.Units.FAHRENHEIT))
         evStatus = VehicleStatus.EVStatus(false, 0.0, VehicleStatus.FuelRange(Distance(252.0, Distance.Units.MILES), 84.0), VehicleStatus.PlugType.UNPLUGGED)
+    }
+
+    @Test fun theTileSaysHowOldItsDataIs() {
+        val now = java.time.Instant.parse("2026-11-06T18:00:00Z")
+        val old = vehicle(locked = true, climate = false).apply { lastUpdated = now.minusSeconds(3 * 3600 + 120) }
+        assertEquals("252 mi · Locked · 3h ago", tileContent(old, Distance.Units.MILES, command = null, now = now).detail)
+        assertNull(staleAge(now.minusSeconds(600), now))
+        assertEquals("45m ago", staleAge(now.minusSeconds(45 * 60), now))
+        assertEquals("2d ago", staleAge(now.minusSeconds(2 * 86_400 + 60), now))
     }
 
     @Test fun theTileShowsTheCarAndTheOppositeCommands() {

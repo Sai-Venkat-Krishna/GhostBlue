@@ -1,5 +1,6 @@
 package com.saivenkatkrishna.ghostblue.ui
 
+import com.saivenkatkrishna.ghostblue.data.account.AccountController
 import com.saivenkatkrishna.ghostblue.kit.model.APIError
 import com.saivenkatkrishna.ghostblue.kit.model.APIError.ErrorType
 
@@ -10,7 +11,9 @@ data class UserError(val action: String, val summary: String, val details: Strin
 fun refreshErrorMessage(error: Throwable): String {
     val apiError = error as? APIError ?: return "Unable to refresh - check connection and try again"
     return when (apiError.errorType) {
-        ErrorType.INVALID_CREDENTIALS -> "Login expired - please check account settings"
+        ErrorType.INVALID_CREDENTIALS ->
+            if (apiError.message == AccountController.LOGIN_REJECTED_MESSAGE) "Password refused - update it in Settings › Accounts"
+            else "Login expired - please check account settings"
         ErrorType.INVALID_PIN -> "PIN validation failed - check account settings"
         ErrorType.INVALID_VEHICLE_SESSION -> "Vehicle session expired - trying to reconnect"
         ErrorType.SERVER_ERROR -> "Server temporarily unavailable - try again later"
