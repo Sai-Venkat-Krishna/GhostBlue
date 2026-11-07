@@ -10,6 +10,8 @@ GhostBlue is a native iOS/watchOS app for controlling Hyundai and Kia vehicles v
 
 BetterBlueKit is included as a **git submodule** in the `BetterBlueKit/` directory. This allows local development and testing of BetterBlueKit changes without pushing to GitHub. The project is configured to use the local package via `XCLocalSwiftPackageReference`.
 
+The submodule tracks the `ghostblue` branch of a fork, `Sai-Venkat-Krishna/BetterBlueKit`: GhostBlue relies on commits that aren't in upstream `schmidtwmark/BetterBlueKit` (ABRP logging, the test car's trip data, stable trip dates). Push every BetterBlueKit commit the submodule points at to the fork before pushing GhostBlue, or a fresh clone can't check it out. Upstream is the submodule's `upstream` remote; it has moved on since, including a redaction change that `android/betterbluekit` would have to follow.
+
 To initialize or update the submodule after cloning:
 ```bash
 git submodule update --init --recursive

@@ -1,3 +1,4 @@
 [submodule "BetterBlueKit"]
 	path = BetterBlueKit
-	url = https://github.com/schmidtwmark/BetterBlueKit.git
+	url = https://github.com/Sai-Venkat-Krishna/BetterBlueKit.git
+	branch = ghostblue
